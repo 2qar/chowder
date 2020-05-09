@@ -10,7 +10,12 @@
 #include <openssl/rsa.h>
 #include <openssl/err.h>
 
+#include <assert.h>
+
 #define PLAYERS 4
+
+int read_varint(int);
+void read_string(int);
 
 int main() {
 	/* socket init */
@@ -60,11 +65,24 @@ int main() {
 
 	int conn;
 	if ((conn = accept(sfd, NULL, NULL)) != -1) {
-		// ayy it works
-		puts("got a connection :)");
-		// TODO: start handling packets (recv(3p) from sfd)
-			// TODO ^ before that can get done, handle varints and little endian network shit
-			//      maybe htons(3p) can help???
+		/* handshake */
+		int packet_size = read_varint(conn);
+		printf("packet size: %d\n", packet_size);
+		int packet_id = read_varint(conn);
+		printf("packet ID: %d\n", packet_id);
+		assert(packet_id == 0x00);
+		int protocol_version = read_varint(conn);
+		printf("protocol version: %d\n", protocol_version);
+		read_string(conn);
+		uint16_t port;
+		// FIXME: handle 0
+		if (read(conn, &port, 2) < 0) {
+			perror("read");
+			exit(1);
+		}
+		printf("port: %d\n", ntohs(port));
+		int next_state = read_varint(conn);
+		printf("next state: %d\n", next_state);
 	} else {
 		perror("accept");
 	}
@@ -72,4 +90,33 @@ int main() {
 	BN_clear_free(n);
 	RSA_free(rsa);
 	close(sfd);
+}
+
+int read_varint(int sfd) {
+	int n = 0;
+	int result = 0;
+	uint8_t b;
+	do {
+		// FIXME: handle read == 0
+		if (read(sfd, &b, (size_t) 1) < 0) {
+			fprintf(stderr, "fuck\n");
+			perror("read");
+			exit(1);
+		}
+		result |= ((b & 0x7f) << (7 * n++));
+	} while ((b & 0x80) != 0);
+	return result;
+}
+
+void read_string(int sfd) {
+	int len = read_varint(sfd);
+	// FIXME: this probably doesn't actually handle UTF-8 properly but idk
+	char bytes[len+1];
+	// FIXME: handle read == 0
+	if (read(sfd, &bytes, len) < 0) {
+		perror("read");
+		exit(1);
+	}
+	bytes[len] = 0;
+	printf("parsed %s\n", bytes);
 }
