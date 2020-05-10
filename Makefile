@@ -1,2 +1,2 @@
 make:
-	cc main.c -Wall -lssl -lcrypto -o chowder
+	cc main.c packet.c protocol.c -Wall -lssl -lcrypto -o chowder

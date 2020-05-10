@@ -12,10 +12,9 @@
 
 #include <assert.h>
 
-#define PLAYERS 4
+#include "protocol.h"
 
-int read_varint(int);
-int read_string(char[], int);
+#define PLAYERS 4
 
 int main() {
 	/* socket init */
@@ -65,31 +64,10 @@ int main() {
 
 	int conn;
 	if ((conn = accept(sfd, NULL, NULL)) != -1) {
-		/* handshake */
-		// TODO: make a function that reads packet content into a byte buffer
-		//       using the parsed packet_size to avoid making a gajillion syscalls just to parse the packet
-		int packet_size = read_varint(conn);
-		printf("packet size: %d\n", packet_size);
-		int packet_id = read_varint(conn);
-		printf("packet ID: %d\n", packet_id);
-		assert(packet_id == 0x00);
-		int protocol_version = read_varint(conn);
-		printf("protocol version: %d\n", protocol_version);
-		char ip[1000];
-		if (read_string(ip, conn) < 0) {
-			perror("read");
-			exit(1);
-		}
-		printf("ip: %s\n", ip);
-		uint16_t port;
-		// FIXME: handle 0
-		if (read(conn, &port, 2) < 0) {
-			perror("read");
-			exit(1);
-		}
-		printf("port: %d\n", ntohs(port));
-		int next_state = read_varint(conn);
-		printf("next state: %d\n", next_state);
+		int next_state = handshake(conn);
+		// TODO: handle packet status 1, server list ping
+		assert(next_state == 2);
+		printf("next_state: %d\n", next_state);
 	} else {
 		perror("accept");
 	}
@@ -97,31 +75,4 @@ int main() {
 	BN_clear_free(n);
 	RSA_free(rsa);
 	close(sfd);
-}
-
-int read_varint(int sfd) {
-	int n = 0;
-	int result = 0;
-	uint8_t b;
-	do {
-		// FIXME: handle read == 0
-		if (read(sfd, &b, (size_t) 1) < 0) {
-			fprintf(stderr, "fuck\n");
-			perror("read");
-			exit(1);
-		}
-		result |= ((b & 0x7f) << (7 * n++));
-	} while ((b & 0x80) != 0);
-	return result;
-}
-
-int read_string(char b[], int sfd) {
-	int len = read_varint(sfd);
-	// FIXME: this probably doesn't actually handle UTF-8 properly but idk
-	// FIXME: handle read == 0
-	if (read(sfd, b, len) < 0) {
-		return -1;
-	}
-	b[len] = 0;
-	return len;
 }
