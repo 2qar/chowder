@@ -77,6 +77,18 @@ void make_packet(struct send_packet *p, int id) {
 	write_varint(p, id);
 }
 
+int write_packet(int sfd, struct send_packet *p) {
+	int b;
+	if ((b = write(sfd, p->_data, p->_data[0])) < 0) {
+		perror("write");
+		return -1;
+	} else if (b != p->_data[0]) {
+		fprintf(stderr, "whole packet not written: %d != %d\n", b, p->_data[0]);
+		return -1;
+	}
+	return b;
+}
+
 void write_byte(struct send_packet *p, uint8_t b) {
 	p->_data[p->_data[0]++] = b;
 }

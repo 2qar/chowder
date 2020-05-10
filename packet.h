@@ -18,6 +18,7 @@ struct send_packet {
 	uint8_t _data[MAX_PACKET_LEN];
 };
 void make_packet(struct send_packet *, int);
+int write_packet(int, struct send_packet *);
 void write_byte(struct send_packet *, uint8_t);
 void write_varint(struct send_packet *, int);
 void write_string(struct send_packet *, int, char[]);
