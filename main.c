@@ -15,6 +15,7 @@
 #include "protocol.h"
 
 #define PLAYERS 4
+#define PORT 25566
 
 int main() {
 	/* socket init */
@@ -22,7 +23,7 @@ int main() {
 
 	struct sockaddr_in saddr = {0};
 	saddr.sin_family = AF_INET;
-	saddr.sin_port = htons(25565);
+	saddr.sin_port = htons(PORT);
 	saddr.sin_addr.s_addr = 0; // localhost idiot
 
 	if (bind(sfd, (struct sockaddr *) &saddr, sizeof(saddr)) != 0) {
@@ -68,6 +69,10 @@ int main() {
 		// TODO: handle packet status 1, server list ping
 		assert(next_state == 2);
 		printf("next_state: %d\n", next_state);
+		char username[17];
+		// TODO: handle the error better, dummy
+		if (login_start(conn, username) < 0)
+			exit(1);
 	} else {
 		perror("accept");
 	}

@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "protocol.h"
 
@@ -27,4 +28,17 @@ int handshake(int sfd) {
 
 	free(p);
 	return next_state;
+}
+
+int login_start(int sfd, char username[]) {
+	struct recv_packet *p = malloc(sizeof(struct recv_packet));
+	if (parse_packet(p, sfd) < 0)
+		return -1;
+	int len;
+	if ((len = read_string(p, username)) > 16) {
+		fprintf(stderr, "login_start: expected username to be 16 characters, got %d\n", len);
+		return -1;
+	}
+	free(p);
+	return 0;
 }
