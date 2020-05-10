@@ -42,3 +42,36 @@ int login_start(int sfd, char username[]) {
 	free(p);
 	return 0;
 }
+
+int encryption_request(int sfd, size_t pub_key_len, char *pub_key, uint8_t verify[4]) {
+	struct send_packet *p = malloc(sizeof(struct send_packet));
+	make_packet(p, 0x01);
+
+	char server_id[] = "                    "; // kinda dumb but ok
+	write_string(p, 20, server_id);
+
+	write_varint(p, pub_key_len);
+	for (int i = 0; i < pub_key_len; ++i)
+		write_byte(p, pub_key[i]);
+
+	/* verify token */
+	write_varint(p, 4);
+	for (int i = 0; i < 4; ++i) {
+		write_byte(p, (verify[i] = (rand() % 255)));
+	}
+
+	// TODO: move this block to packet.c or smth so this doesn't get pastad into each packet.
+	// TODO: take packet pointer to write to and return b so caller can write to socket themselves
+	int b;
+	if ((b = write(sfd, p->_data, p->_data[0])) < 0) {
+		perror("write");
+		return -1;
+	} else if (b != p->_data[0]) {
+		fprintf(stderr, "whole packet not written: %d != %d\n", b, p->_data[0]);
+		return -1;
+	}
+	// end todo
+
+	free(p);
+	return 0;
+}

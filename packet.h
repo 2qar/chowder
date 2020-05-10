@@ -9,8 +9,15 @@ struct recv_packet {
 	uint8_t _data[1000];
 	int _index;
 };
-
 int parse_packet(struct recv_packet *, int);
 int read_varint(struct recv_packet *, int *);
 int read_string(struct recv_packet *, char[]);
 void read_ushort(struct recv_packet *, uint16_t *);
+
+struct send_packet {
+	uint8_t _data[MAX_PACKET_LEN];
+};
+void make_packet(struct send_packet *, int);
+void write_byte(struct send_packet *, uint8_t);
+void write_varint(struct send_packet *, int);
+void write_string(struct send_packet *, int, char[]);

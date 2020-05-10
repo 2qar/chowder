@@ -71,3 +71,31 @@ void read_ushort(struct recv_packet *p, uint16_t *s) {
 	*s = _read_byte(p) << 8;
 	*s += _read_byte(p);
 }
+
+void make_packet(struct send_packet *p, int id) {
+	write_varint(p, 0);
+	write_varint(p, id);
+}
+
+void write_byte(struct send_packet *p, uint8_t b) {
+	p->_data[p->_data[0]++] = b;
+}
+
+void write_varint(struct send_packet *p, int i) {
+	uint8_t temp;
+	do {
+		temp = i & 0x7f;
+		i >>= 7;
+		if (i != 0) {
+			temp |= 0x80;
+		}
+		write_byte(p, temp);
+	} while (i != 0);
+}
+
+void write_string(struct send_packet *p, int len, char s[]) {
+	write_varint(p, len);
+	for (int i = 0; i < len; ++i) {
+		write_byte(p, s[i]);
+	}
+}
