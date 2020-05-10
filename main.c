@@ -15,7 +15,7 @@
 #define PLAYERS 4
 
 int read_varint(int);
-void read_string(int);
+int read_string(char[], int);
 
 int main() {
 	/* socket init */
@@ -66,6 +66,8 @@ int main() {
 	int conn;
 	if ((conn = accept(sfd, NULL, NULL)) != -1) {
 		/* handshake */
+		// TODO: make a function that reads packet content into a byte buffer
+		//       using the parsed packet_size to avoid making a gajillion syscalls just to parse the packet
 		int packet_size = read_varint(conn);
 		printf("packet size: %d\n", packet_size);
 		int packet_id = read_varint(conn);
@@ -73,7 +75,12 @@ int main() {
 		assert(packet_id == 0x00);
 		int protocol_version = read_varint(conn);
 		printf("protocol version: %d\n", protocol_version);
-		read_string(conn);
+		char ip[1000];
+		if (read_string(ip, conn) < 0) {
+			perror("read");
+			exit(1);
+		}
+		printf("ip: %s\n", ip);
 		uint16_t port;
 		// FIXME: handle 0
 		if (read(conn, &port, 2) < 0) {
@@ -108,15 +115,13 @@ int read_varint(int sfd) {
 	return result;
 }
 
-void read_string(int sfd) {
+int read_string(char b[], int sfd) {
 	int len = read_varint(sfd);
 	// FIXME: this probably doesn't actually handle UTF-8 properly but idk
-	char bytes[len+1];
 	// FIXME: handle read == 0
-	if (read(sfd, &bytes, len) < 0) {
-		perror("read");
-		exit(1);
+	if (read(sfd, b, len) < 0) {
+		return -1;
 	}
-	bytes[len] = 0;
-	printf("parsed %s\n", bytes);
+	b[len] = 0;
+	return len;
 }
