@@ -73,28 +73,36 @@ void read_ushort(struct recv_packet *p, uint16_t *s) {
 }
 
 void make_packet(struct send_packet *p, int id) {
-	write_varint(p, 0);
-	write_varint(p, id);
+	p->_packet_len = 0;
+	p->_packet_id = id;
 }
 
 int write_packet(int sfd, struct send_packet *p) {
-	int b;
-	if ((b = write(sfd, p->_data, p->_data[0])) < 0) {
+	struct send_packet w = {0};
+	make_packet(&w, p->_packet_id);
+	write_varint(&w, p->_packet_len+1); // +1 for _packet_id
+	write_varint(&w, w._packet_id);
+	for (int i = 0; i < p->_packet_len; ++i)
+		write_byte(&w, p->_data[i]);
+
+	int n;
+	if ((n = write(sfd, w._data, w._packet_len)) < 0) {
 		perror("write");
 		return -1;
-	} else if (b != p->_data[0]) {
-		fprintf(stderr, "whole packet not written: %d != %d\n", b, p->_data[0]);
+	} else if (n != w._packet_len) {
+		fprintf(stderr, "whole packet not written: %d != %d\n", n, w._packet_len);
 		return -1;
 	}
-	return b;
+	return n;
 }
 
 void write_byte(struct send_packet *p, uint8_t b) {
-	p->_data[p->_data[0]++] = b;
+	p->_data[p->_packet_len++] = b;
 }
 
-void write_varint(struct send_packet *p, int i) {
+int write_varint(struct send_packet *p, int i) {
 	uint8_t temp;
+	int n = 0;
 	do {
 		temp = i & 0x7f;
 		i >>= 7;
@@ -102,7 +110,9 @@ void write_varint(struct send_packet *p, int i) {
 			temp |= 0x80;
 		}
 		write_byte(p, temp);
+		++n;
 	} while (i != 0);
+	return n;
 }
 
 void write_string(struct send_packet *p, int len, char s[]) {
