@@ -6,4 +6,4 @@
 
 int handshake(int);
 int login_start(int, char[]);
-int encryption_request(int, size_t, char *, uint8_t[4]);
+int encryption_request(int, size_t, unsigned char *, uint8_t[4]);

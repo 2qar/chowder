@@ -43,16 +43,16 @@ int login_start(int sfd, char username[]) {
 	return 0;
 }
 
-int encryption_request(int sfd, size_t pub_key_len, char *pub_key, uint8_t verify[4]) {
+int encryption_request(int sfd, size_t der_len, unsigned char *der, uint8_t verify[4]) {
 	struct send_packet *p = malloc(sizeof(struct send_packet));
 	make_packet(p, 0x01);
 
 	char server_id[] = "                    "; // kinda dumb but ok
 	write_string(p, 20, server_id);
 
-	write_varint(p, pub_key_len);
-	for (int i = 0; i < pub_key_len; ++i)
-		write_byte(p, pub_key[i]);
+	write_varint(p, der_len);
+	for (int i = 0; i < der_len; ++i)
+		write_byte(p, der[i]);
 
 	/* verify token */
 	write_varint(p, 4);

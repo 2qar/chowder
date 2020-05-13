@@ -6,9 +6,10 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#include <openssl/bn.h>
+#include <openssl/bio.h>
 #include <openssl/rsa.h>
-#include <openssl/pem.h>
+#include <openssl/evp.h>
+#include <openssl/x509.h>
 #include <openssl/err.h>
 
 #include <assert.h>
@@ -38,44 +39,46 @@ int main() {
 	}
 
 	/* RSA keygen */
-	RSA *rsa;
-	if (!(rsa = RSA_new())) {
-		fprintf(stderr, "RSA_new: %lu", ERR_get_error());
+	EVP_PKEY *pkey = NULL;
+	EVP_PKEY_CTX *ctx;
+	if ((ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL)) <= 0) {
+		fprintf(stderr, "EVP_PKEY_CTX_new_id(): %lu\n", ERR_get_error());
 		exit(1);
 	}
-	BIGNUM *n;
-	if (!(n = BN_new())) {
-		fprintf(stderr, "BN_new: %lu", ERR_get_error());
+	if (EVP_PKEY_keygen_init(ctx) <= 0) {
+		fprintf(stderr, "EVP_PKEY_keygen_init(): %lu\n", ERR_get_error());
 		exit(1);
 	}
-	/* (hopefully) set n to 3 */
-	if (!(BN_set_bit(n, 0))) {
-		fprintf(stderr, "BN_set_bit: %lu", ERR_get_error());
+	if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 1024) <= 0) {
+		fprintf(stderr, "EVP_PKEY_CTX_set_rsa_keygen_bits(): %lu\n", ERR_get_error());
 		exit(1);
 	}
-	if (!(BN_set_bit(n, 1))) {
-		fprintf(stderr, "BN_set_bit: %lu", ERR_get_error());
-		exit(1);
-	}
-	if (!RSA_generate_key_ex(rsa, 1024, n, NULL)) {
-		fprintf(stderr, "RSA_generate_key_ex: %lu", ERR_get_error());
+	if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
+		fprintf(stderr, "EVP_PKEY_keygen(): %lu\n", ERR_get_error());
 		exit(1);
 	}
 
+	// reading from a BIO into a char * instead of reading directly into char *
+	// seems kinda hacky, but it works :)
 	BIO *bio;
 	if (!(bio = BIO_new(BIO_s_mem()))) {
-		fputs("error creating BIO", stderr);
+		fprintf(stderr, "BIO_new(): %lu\n", ERR_get_error());
 		exit(1);
 	}
-	if (!(PEM_write_bio_RSAPublicKey(bio, rsa))) {
-		fputs("error writing key", stderr);
+	if (!i2d_PUBKEY_bio(bio, pkey)) {
+		fprintf(stderr, "i2d_PUBKEY_fp(): %lu\n", ERR_get_error());
 		exit(1);
 	}
-	size_t key_len = BIO_pending(bio);
-	char *pub_key = malloc(key_len + 1);
-	BIO_read(bio, pub_key, key_len);
-	pub_key[key_len] = 0;
-	printf("encoded public key!\n%s\n", pub_key);
+	int der_len = BIO_pending(bio);
+	unsigned char *der = malloc(der_len + 1);
+	int n;
+	if ((n = BIO_read(bio, der, der_len)) <= 0) {
+		fprintf(stderr, "BIO_read(): %lu\n", ERR_get_error());
+		exit(1);
+	} else if (n != der_len) {
+		fprintf(stderr, "BIO_read bytes mismatch: %d != %d", n, der_len);
+		exit(1);
+	}
 
 	/* connection handling */
 	int conn;
@@ -89,15 +92,16 @@ int main() {
 		if (login_start(conn, username) < 0)
 			exit(1);
 		uint8_t verify[4];
-		if (encryption_request(conn, key_len, pub_key, verify) < 0)
+		if (encryption_request(conn, der_len, der, verify) < 0)
 			exit(1);
 		close(conn);
 	} else {
 		perror("accept");
 	}
 
-	free(pub_key);
-	BN_clear_free(n);
-	RSA_free(rsa);
+	BIO_free(bio);
+	EVP_PKEY_CTX_free(ctx);
+	EVP_PKEY_free(pkey);
 	close(sfd);
+	return 0;
 }
