@@ -71,6 +71,10 @@ int encryption_request(int sfd, size_t der_len, unsigned char *der, uint8_t veri
 }
 
 int decrypt_byte_array(struct recv_packet *p, EVP_PKEY_CTX *ctx, size_t len, uint8_t *out) {
+	int bytes;
+	if (read_varint(p, &bytes) < 0 || bytes != 128) {
+		return -1;
+	}
 	uint8_t encrypted[128];
 	for (int i = 0; i < 128; ++i)
 		encrypted[i] = read_byte(p);
@@ -87,29 +91,25 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, uint8_t verify[4], uint8_t s
 	if (parse_packet(p, sfd) < 0)
 		return -1;
 
-	int secret_len;
-	if (read_varint(p, &secret_len) < 0 && secret_len != 128)
-		return -1;
-	secret_len = 1000;
-	uint8_t client_secret[secret_len];
-	if (decrypt_byte_array(p, ctx, (size_t) secret_len, client_secret) < 0) {
+	const size_t buf_len = 1000;
+	uint8_t buf[buf_len];
+	if (decrypt_byte_array(p, ctx, buf_len, buf) < 0) {
 		return -1;
 	}
+	for (int i = 0; i < 16; ++i) {
+		secret[i] = buf[i];
+	}
 
-	int verify_len;
-	if (read_varint(p, &verify_len) < 0)
-		return -1;
-	uint8_t *client_verify = malloc(sizeof(uint8_t) * verify_len);
-	if (decrypt_byte_array(p, ctx, (size_t) verify_len, client_verify) < 0) {
+	/* read client verify */
+	if (decrypt_byte_array(p, ctx, buf_len, buf) < 0) {
 		return -1;
 	}
-	printf("client verify: %d-%d-%d-%d\n", client_verify[0], client_verify[1], client_verify[2], client_verify[3]);
-	printf("verify: %d-%d-%d-%d\n", verify[0], verify[1], verify[2], verify[3]);
-
-	/* verify the two verify byte arrays */
+	/* verify the verifys */
 	for (int i = 0; i < 4; ++i) {
-		if (client_verify[i] != verify[i]) {
-			fputs("mistmatched verify", stderr);
+		if (buf[i] != verify[i]) {
+			fprintf(stderr, "verify mismatch!\nclient: %d-%d-%d-%d\nserver: %d-%d-%d-%d",
+					buf[0], buf[1], buf[2], buf[3],
+					verify[0], verify[1], verify[2], verify[3]);
 			return -1;
 		}
 	}
