@@ -70,7 +70,7 @@ int encryption_request(int sfd, size_t der_len, unsigned char *der, uint8_t veri
 	return b;
 }
 
-int decrypt_byte_array(struct recv_packet *p, EVP_PKEY_CTX *ctx, EVP_PKEY *pkey, size_t len, uint8_t *out) {
+int decrypt_byte_array(struct recv_packet *p, EVP_PKEY_CTX *ctx, size_t len, uint8_t *out) {
 	uint8_t encrypted[128];
 	for (int i = 0; i < 128; ++i)
 		encrypted[i] = read_byte(p);
@@ -82,7 +82,7 @@ int decrypt_byte_array(struct recv_packet *p, EVP_PKEY_CTX *ctx, EVP_PKEY *pkey,
 	return n;
 }
 
-int encryption_response(int sfd, EVP_PKEY_CTX *ctx, EVP_PKEY *pkey, uint8_t verify[4], uint8_t secret[16]) {
+int encryption_response(int sfd, EVP_PKEY_CTX *ctx, uint8_t verify[4], uint8_t secret[16]) {
 	struct recv_packet *p = malloc(sizeof(struct recv_packet));
 	if (parse_packet(p, sfd) < 0)
 		return -1;
@@ -92,7 +92,7 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, EVP_PKEY *pkey, uint8_t veri
 		return -1;
 	secret_len = 1000;
 	uint8_t client_secret[secret_len];
-	if (decrypt_byte_array(p, ctx, pkey, (size_t) secret_len, client_secret) < 0) {
+	if (decrypt_byte_array(p, ctx, (size_t) secret_len, client_secret) < 0) {
 		return -1;
 	}
 
@@ -100,7 +100,7 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, EVP_PKEY *pkey, uint8_t veri
 	if (read_varint(p, &verify_len) < 0)
 		return -1;
 	uint8_t *client_verify = malloc(sizeof(uint8_t) * verify_len);
-	if (decrypt_byte_array(p, ctx, pkey, (size_t) verify_len, client_verify) < 0) {
+	if (decrypt_byte_array(p, ctx, (size_t) verify_len, client_verify) < 0) {
 		return -1;
 	}
 	printf("client verify: %d-%d-%d-%d\n", client_verify[0], client_verify[1], client_verify[2], client_verify[3]);

@@ -116,7 +116,7 @@ int main() {
 		if (encryption_request(conn, der_len, der, verify) < 0)
 			exit(1);
 		uint8_t secret[16];
-		if (encryption_response(conn, ctx, pkey, verify, secret) < 0)
+		if (encryption_response(conn, ctx, verify, secret) < 0)
 			exit(1);
 		close(conn);
 	} else {
