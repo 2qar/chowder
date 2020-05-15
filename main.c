@@ -10,6 +10,7 @@
 #include <openssl/rsa.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <openssl/engine.h>
 #include <openssl/err.h>
 
 #include <assert.h>
@@ -60,6 +61,9 @@ int main() {
 
 	// reading from a BIO into a char * instead of reading directly into char *
 	// seems kinda hacky, but it works :)
+	// TODO: replace BIO with char *.
+	//       i2d_PUBKEY increments the pointer by the # of bytes written (i think),
+	//       which is why printing it was printing a bunch of zeroes
 	BIO *bio;
 	if (!(bio = BIO_new(BIO_s_mem()))) {
 		fprintf(stderr, "BIO_new(): %lu\n", ERR_get_error());
@@ -79,6 +83,22 @@ int main() {
 		fprintf(stderr, "BIO_read bytes mismatch: %d != %d", n, der_len);
 		exit(1);
 	}
+	EVP_PKEY_CTX_free(ctx);
+
+	// TODO: EVP_PKEY_CTX isn't thread-safe, so if i ever get there,
+	//       do this decryption context stuff when decrypting packets
+	if (!(ctx = EVP_PKEY_CTX_new(pkey, ENGINE_get_default_RSA()))) {
+		fprintf(stderr, "EVP_PKEY_CTX_new(): %lu\n", ERR_get_error());
+		exit(1);
+	}
+	if (EVP_PKEY_decrypt_init(ctx) <= 0) {
+		fprintf(stderr, "EVP_PKEY_decrypt_init(): %lu\n", ERR_get_error());
+		exit(1);
+	}
+	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0) {
+		fprintf(stderr, "EVP_PKEY_CTX_set_rsa_padding(): %lu\n", ERR_get_error());
+		exit(1);
+	}
 
 	/* connection handling */
 	int conn;
@@ -91,14 +111,19 @@ int main() {
 		// TODO: handle the error better, dummy
 		if (login_start(conn, username) < 0)
 			exit(1);
+		printf("username: %s\n", username);
 		uint8_t verify[4];
 		if (encryption_request(conn, der_len, der, verify) < 0)
+			exit(1);
+		uint8_t secret[16];
+		if (encryption_response(conn, ctx, pkey, verify, secret) < 0)
 			exit(1);
 		close(conn);
 	} else {
 		perror("accept");
 	}
 
+	free(der);
 	BIO_free(bio);
 	EVP_PKEY_CTX_free(ctx);
 	EVP_PKEY_free(pkey);

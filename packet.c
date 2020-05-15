@@ -38,7 +38,7 @@ int parse_packet(struct recv_packet *p, int sfd) {
 }
 
 // TODO: probably check index against packet_len before just returning stuff
-uint8_t _read_byte(struct recv_packet *p) {
+uint8_t read_byte(struct recv_packet *p) {
 	return p->_data[p->_index++];
 }
 
@@ -48,7 +48,7 @@ int read_varint(struct recv_packet *p, int *v) {
 	*v = 0;
 	uint8_t b;
 	do {
-		b = _read_byte(p);
+		b = read_byte(p);
 		*v |= ((b & 0x7f) << (7 * n++));
 	} while ((b & 0x80) != 0);
 
@@ -62,14 +62,14 @@ int read_string(struct recv_packet *p, char b[]) {
 		return -1;
 
 	for (int i = 0; i < len; ++i)
-		b[i] = _read_byte(p);
+		b[i] = read_byte(p);
 	b[len] = 0;
 	return len;
 }
 
 void read_ushort(struct recv_packet *p, uint16_t *s) {
-	*s = _read_byte(p) << 8;
-	*s += _read_byte(p);
+	*s = read_byte(p) << 8;
+	*s += read_byte(p);
 }
 
 void make_packet(struct send_packet *p, int id) {

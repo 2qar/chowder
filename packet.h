@@ -10,6 +10,7 @@ struct recv_packet {
 	int _index;
 };
 int parse_packet(struct recv_packet *, int);
+uint8_t read_byte(struct recv_packet *p);
 int read_varint(struct recv_packet *, int *);
 int read_string(struct recv_packet *, char[]);
 void read_ushort(struct recv_packet *, uint16_t *);
