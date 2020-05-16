@@ -14,6 +14,7 @@
 #include <assert.h>
 
 #include "protocol.h"
+#include "server.h"
 
 #define PLAYERS 4
 #define PORT 25566
@@ -105,6 +106,13 @@ int main() {
 		uint8_t secret[16];
 		if (encryption_response(conn, ctx, verify, secret) < 0)
 			exit(1);
+		char *hash = mc_hash(DER_KEY_LEN, der, secret);
+		if (!hash) {
+			fputs("error generating SHA1 hash", stderr);
+			exit(1);
+		}
+		puts(hash);
+		free(hash);
 		close(conn);
 	} else {
 		perror("accept");

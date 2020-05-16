@@ -114,12 +114,6 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, uint8_t verify[4], uint8_t s
 		}
 	}
 
-	/* TODO: SHA1 hexdigest of the server id, shared secret, and encoded public key.
-	 *       Then, send it to the mojang url and FUCK it's a JSON response
-	SHA_CTX *c;
-	if (SHA1_Init(c)
-	*/
-
 	free(p);
 	return 0;
 }
