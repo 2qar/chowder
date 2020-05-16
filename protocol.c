@@ -47,7 +47,7 @@ int login_start(int sfd, char username[]) {
 	return 0;
 }
 
-int encryption_request(int sfd, size_t der_len, unsigned char *der, uint8_t verify[4]) {
+int encryption_request(int sfd, size_t der_len, const unsigned char *der, uint8_t verify[4]) {
 	struct send_packet *p = malloc(sizeof(struct send_packet));
 	make_packet(p, 0x01);
 
@@ -86,7 +86,7 @@ int decrypt_byte_array(struct recv_packet *p, EVP_PKEY_CTX *ctx, size_t len, uin
 	return n;
 }
 
-int encryption_response(int sfd, EVP_PKEY_CTX *ctx, uint8_t verify[4], uint8_t secret[16]) {
+int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uint8_t secret[16]) {
 	struct recv_packet *p = malloc(sizeof(struct recv_packet));
 	if (parse_packet(p, sfd) < 0)
 		return -1;
