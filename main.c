@@ -99,7 +99,6 @@ int main() {
 		// TODO: handle the error better, dummy
 		if (login_start(conn, username) < 0)
 			exit(1);
-		printf("username: %s\n", username);
 		uint8_t verify[4];
 		if (encryption_request(conn, DER_KEY_LEN, der, verify) < 0)
 			exit(1);
@@ -111,7 +110,9 @@ int main() {
 			fputs("error generating SHA1 hash", stderr);
 			exit(1);
 		}
-		puts(hash);
+		uint8_t id[37];
+		if (player_id(username, hash, id) < 0)
+			exit(1);
 		free(hash);
 		close(conn);
 	} else {
