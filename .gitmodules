@@ -1,0 +1,3 @@
+[submodule "include/jsmn"]
+	path = include/jsmn
+	url = https://github.com/zserge/jsmn

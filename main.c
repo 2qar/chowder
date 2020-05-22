@@ -110,7 +110,7 @@ int main() {
 			fputs("error generating SHA1 hash", stderr);
 			exit(1);
 		}
-		uint8_t id[37];
+		char id[37] = {0};
 		if (player_id(username, hash, id) < 0)
 			exit(1);
 		free(hash);

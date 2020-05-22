@@ -11,6 +11,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include "include/jsmn/jsmn.h"
 #include "server.h"
 
 char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16]) {
@@ -75,7 +76,7 @@ void ssl_cleanup(SSL_CTX *ctx, SSL *ssl) {
 	SSL_CTX_free(ctx);
 }
 
-int player_id(const char *username, const char *hash, uint8_t id[36]) {
+int ping_sessionserver(const char *username, const char *hash, char **response) {
 	struct addrinfo hints = {0};
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
@@ -130,10 +131,9 @@ int player_id(const char *username, const char *hash, uint8_t id[36]) {
 	freeaddrinfo(res);
 
 	const size_t buf_len = 2048;
-	char buf[buf_len];
-	int write_len = snprintf(buf, buf_len, "GET /session/minecraft/hasJoined?username=%s&serverId=%s HTTP/1.1\r\nHost: sessionserver.mojang.com\r\nUser-Agent: Chowder :)\r\n\r\n", username, hash);
-	printf("get request: %s\n", buf);
-	err = SSL_write(ssl, buf, write_len);
+	*response = malloc(sizeof(char) * buf_len);
+	int write_len = snprintf(*response, buf_len, "GET /session/minecraft/hasJoined?username=%s&serverId=%s HTTP/1.1\r\nHost: sessionserver.mojang.com\r\nUser-Agent: Chowder :)\r\n\r\n", username, hash);
+	err = SSL_write(ssl, *response, write_len);
 	if (err <= 0) {
 		fprintf(stderr, "SSL_write(): %d\n", SSL_get_error(ssl, err));
 		ssl_cleanup(ssl_ctx, ssl);
@@ -143,21 +143,82 @@ int player_id(const char *username, const char *hash, uint8_t id[36]) {
 		ssl_cleanup(ssl_ctx, ssl);
 		return -1;
 	}
-	memset(buf, 0, write_len);
-	puts("wrote it");
+	memset(*response, 0, write_len);
 
-	err = SSL_read(ssl, buf, buf_len);
+	err = SSL_read(ssl, *response, buf_len);
 	if (err <= 0) {
 		fprintf(stderr, "SSL_read(): %d\n", SSL_get_error(ssl, err));
 		ssl_cleanup(ssl_ctx, ssl);
 		return -1;
 	}
-	puts(buf);
-
-	// TODO: parse the response with jsmn
 
 	SSL_shutdown(ssl);
 	ssl_cleanup(ssl_ctx, ssl);
 	close(sfd);
+	return err;
+}
+
+int read_body(size_t resp_len, char *resp) {
+	char *body_start;
+	for (body_start = resp; body_start - resp < resp_len; ++body_start) {
+		// TODO: kinda hacky
+		//       probably check the request status + actually parse Content-Length for more safety
+		if (*body_start == '\r' && !strncmp(body_start, "\r\n\r\n", 4)) {
+			body_start += 4;
+			break;
+		}
+	}
+	if (body_start - resp == resp_len)
+		return -1;
+
+	size_t body_len = resp_len - (body_start - resp) + 1;
+	return snprintf(resp, body_len, "%s", body_start);
+}
+
+int player_id(const char *username, const char *hash, char id[37]) {
+	char *response;
+	int response_len = ping_sessionserver(username, hash, &response);
+	if (response_len < 0) {
+		return -1;
+	}
+	size_t body_len = read_body((size_t) response_len, response);
+
+	// parse player id
+	jsmn_parser p;
+	jsmntok_t t[128];
+	jsmn_init(&p);
+	int tokens = jsmn_parse(&p, response, body_len, t, 128);
+	if (tokens < 0) {
+		fprintf(stderr, "jsmn_parse() failed: %d\n", tokens);
+		return -1;
+	} else if (tokens < 1 || t[0].type != JSMN_OBJECT) {
+		fprintf(stderr, "no JSON object\n");
+		return -1;
+	}
+	char temp_id[32];
+	for (int i = 1; i < tokens; ++i) {
+		if (t[i].type == JSMN_STRING && t[i].end - t[i].start == 2 && !strncmp(response + t[i].start, "id", 2)) {
+			for (int j = 0; j < 32; ++j)
+				temp_id[j] = response[j + t[i+1].start];
+			break;
+		}
+	}
+	free(response);
+	if (temp_id[0] == 0) {
+		fprintf(stderr, "no \"id\" field present in sessionserver response\n");
+		return -1;
+	}
+
+	// format id like a UUID (kinda dumb but it works)
+	strncat(id, temp_id, 8);
+	id[8] = '-';
+	strncat(id, temp_id+8, 4);
+	id[13] = '-';
+	strncat(id, temp_id+12, 4);
+	id[18] = '-';
+	strncat(id, temp_id+16, 4);
+	id[23] = '-';
+	strncat(id, temp_id+20, 12);
+
 	return 0;
 }
