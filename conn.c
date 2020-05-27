@@ -17,8 +17,6 @@ int conn_encrypt_init(struct conn *c, const uint8_t secret[16]) {
 		return -1;
 	if (!cipher_init(&(c->_encrypt_ctx), secret, 1))
 		return -1;
-	for (int i = 0; i < 16; ++i)
-		c->_secret[i] = secret[i];
 	return 0;
 }
 

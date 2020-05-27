@@ -11,7 +11,6 @@ struct conn {
 	int _sfd;
 	EVP_CIPHER_CTX *_decrypt_ctx;
 	EVP_CIPHER_CTX *_encrypt_ctx;
-	uint8_t _secret[16];
 };
 
 void conn_init(struct conn *, int);
