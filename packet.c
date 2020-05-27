@@ -103,20 +103,22 @@ struct send_packet *finalize_packet(struct send_packet *p) {
 	return p;
 }
 
-int write_packet(int sfd, const struct send_packet *p) {
-	if (p == NULL) {
-		return -1;
-	}
-
+int write_packet_data(int sfd, const uint8_t data[], size_t len) {
 	int n;
-	if ((n = write(sfd, p->_data, p->_packet_len)) < 0) {
+	if ((n = write(sfd, data, len)) < 0) {
 		perror("write");
 		return -1;
-	} else if (n != p->_packet_len) {
-		fprintf(stderr, "whole packet not written: %d != %d\n", n, p->_packet_len);
+	} else if (n != len) {
+		fprintf(stderr, "whole packet not written: %d != %ld\n", n, len);
 		return -1;
 	}
 	return n;
+}
+
+int write_packet(int sfd, const struct send_packet *p) {
+	if (p == NULL)
+		return -1;
+	return write_packet_data(sfd, p->_data, p->_packet_len);
 }
 
 void write_byte(struct send_packet *p, uint8_t b) {
@@ -138,7 +140,7 @@ int write_varint(struct send_packet *p, int i) {
 	return n;
 }
 
-void write_string(struct send_packet *p, int len, char s[]) {
+void write_string(struct send_packet *p, int len, const char s[]) {
 	write_varint(p, len);
 	for (int i = 0; i < len; ++i) {
 		write_byte(p, s[i]);

@@ -15,6 +15,7 @@
 
 #include "protocol.h"
 #include "server.h"
+#include "conn.h"
 
 #define PLAYERS 4
 #define PORT 25566
@@ -113,8 +114,18 @@ int main() {
 		char id[37] = {0};
 		if (player_id(username, hash, id) < 0)
 			exit(1);
+
+		struct conn c = {0};
+		conn_init(&c, conn);
+		if (conn_encrypt_init(&c, secret) < 0) {
+			fprintf(stderr, "error initializing encryption\n");
+			exit(1);
+		}
+
+		if (login_success(&c, id, username) < 0)
+			exit(1);
 		free(hash);
-		close(conn);
+		conn_finish(&c);
 	} else {
 		perror("accept");
 	}

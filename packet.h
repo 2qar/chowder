@@ -1,3 +1,6 @@
+#ifndef CHOWDER_PACKET
+#define CHOWDER_PACKET
+
 #include <unistd.h>
 #include <stdint.h>
 
@@ -22,7 +25,10 @@ struct send_packet {
 };
 void make_packet(struct send_packet *, int);
 struct send_packet *finalize_packet(struct send_packet *);
+int write_packet_data(int, const uint8_t data[], size_t len);
 int write_packet(int, const struct send_packet *);
 void write_byte(struct send_packet *, uint8_t);
 int write_varint(struct send_packet *, int);
-void write_string(struct send_packet *, int, char[]);
+void write_string(struct send_packet *, int, const char[]);
+
+#endif
