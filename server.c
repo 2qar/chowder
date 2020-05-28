@@ -13,6 +13,7 @@
 
 #include "include/jsmn/jsmn.h"
 #include "server.h"
+#include "protocol.h"
 
 char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16]) {
 	SHA_CTX c = {0};
@@ -221,4 +222,33 @@ int player_id(const char *username, const char *hash, char id[37]) {
 	strncat(id, temp_id+20, 12);
 
 	return 0;
+}
+
+int login(int sfd, struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len, EVP_PKEY_CTX *decrypt_ctx) {
+	char username[17];
+	if (login_start(sfd, username) < 0)
+		return -1;
+	uint8_t verify[4];
+	if (encryption_request(sfd, pubkey_len, pubkey_der, verify) < 0)
+		return -1;
+	uint8_t secret[16];
+	if (encryption_response(sfd, decrypt_ctx, verify, secret) < 0)
+		exit(1);
+	char *hash = mc_hash(pubkey_len, pubkey_der, secret);
+	if (!hash) {
+		fputs("error generating SHA1 hash", stderr);
+		exit(1);
+	}
+	char id[37] = {0};
+	if (player_id(username, hash, id) < 0)
+		exit(1);
+	free(hash);
+
+	if (conn_init(c, sfd, secret) < 0) {
+		fprintf(stderr, "error initializing encryption\n");
+		return -1;
+	}
+
+	printf("i think you made it, %s\n", id);
+	return login_success(c, id, username);
 }

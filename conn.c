@@ -3,16 +3,13 @@
 
 #include "conn.h"
 
-void conn_init(struct conn *c, int sfd) {
-	c->_sfd = sfd;
-}
-
 int cipher_init(EVP_CIPHER_CTX **ctx, const uint8_t secret[16], int enc) {
 	*ctx = EVP_CIPHER_CTX_new();
 	return EVP_CipherInit_ex(*ctx, EVP_aes_128_cfb8(), NULL, secret, secret, enc);
 }
 
-int conn_encrypt_init(struct conn *c, const uint8_t secret[16]) {
+int conn_init(struct conn *c, int sfd, const uint8_t secret[16]) {
+	c->_sfd = sfd;
 	if (!cipher_init(&(c->_decrypt_ctx), secret, 0))
 		return -1;
 	if (!cipher_init(&(c->_encrypt_ctx), secret, 1))

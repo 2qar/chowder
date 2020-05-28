@@ -95,36 +95,16 @@ int main() {
 		int next_state = handshake(conn);
 		// TODO: handle packet status 1, server list ping
 		assert(next_state == 2);
-		printf("next_state: %d\n", next_state);
-		char username[17];
-		// TODO: handle the error better, dummy
-		if (login_start(conn, username) < 0)
-			exit(1);
-		uint8_t verify[4];
-		if (encryption_request(conn, DER_KEY_LEN, der, verify) < 0)
-			exit(1);
-		uint8_t secret[16];
-		if (encryption_response(conn, ctx, verify, secret) < 0)
-			exit(1);
-		char *hash = mc_hash(DER_KEY_LEN, der, secret);
-		if (!hash) {
-			fputs("error generating SHA1 hash", stderr);
-			exit(1);
-		}
-		char id[37] = {0};
-		if (player_id(username, hash, id) < 0)
-			exit(1);
 
 		struct conn c = {0};
-		conn_init(&c, conn);
-		if (conn_encrypt_init(&c, secret) < 0) {
-			fprintf(stderr, "error initializing encryption\n");
+		EVP_PKEY_CTX *login_decrypt_ctx = EVP_PKEY_CTX_dup(ctx);
+		int err = login(conn, &c, der, DER_KEY_LEN, login_decrypt_ctx);
+		if (err < 0) {
+			// TODO: return meaningful errors instead of -1 everywhere
+			fprintf(stderr, "error logging in: %d\n", err);
 			exit(1);
 		}
-
-		if (login_success(&c, id, username) < 0)
-			exit(1);
-		free(hash);
+		EVP_PKEY_CTX_free(login_decrypt_ctx);
 		conn_finish(&c);
 	} else {
 		perror("accept");
