@@ -65,7 +65,7 @@ int encryption_request(int sfd, size_t der_len, const unsigned char *der, uint8_
 	}
 
 	// TODO: take packet pointer to write to and return b so caller can write to socket themselves
-	int b = write_packet(sfd, p);
+	int b = write_packet(sfd, finalize_packet(p));
 	free(p);
 	return b;
 }
@@ -116,4 +116,12 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uin
 
 	free(p);
 	return 0;
+}
+
+int login_success(struct conn *c, const char id[36], const char username[16]) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x02);
+	write_string(&p, 36, id);
+	write_string(&p, 16, username);
+	return write_encrypted_packet(c, finalize_packet(&p));
 }

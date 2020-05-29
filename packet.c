@@ -5,6 +5,8 @@
 
 #include "packet.h"
 
+#define FINISHED_PACKET_ID 255
+
 int _read_varint(int sfd, int *v) {
 	int n = 0;
 	*v = 0;
@@ -75,25 +77,48 @@ void read_ushort(struct recv_packet *p, uint16_t *s) {
 void make_packet(struct send_packet *p, int id) {
 	p->_packet_len = 0;
 	p->_packet_id = id;
+	write_byte(p, id);
 }
 
-int write_packet(int sfd, struct send_packet *p) {
-	struct send_packet w = {0};
-	make_packet(&w, p->_packet_id);
-	write_varint(&w, p->_packet_len+1); // +1 for _packet_id
-	write_varint(&w, w._packet_id);
-	for (int i = 0; i < p->_packet_len; ++i)
-		write_byte(&w, p->_data[i]);
+/* insert packet ID + length at the start of the packet's data buffer. */
+struct send_packet *finalize_packet(struct send_packet *p) {
+	if (p->_packet_id == FINISHED_PACKET_ID)
+		return p;
 
+	int temp_len = p->_packet_len;
+	int offset = 0;
+	while (temp_len != 0) {
+		temp_len >>= 7;
+		++offset;
+	}
+	if (p->_packet_len + offset > MAX_PACKET_LEN)
+		return NULL;
+	for (int i = p->_packet_len + offset; i >= offset; --i)
+		p->_data[i] = p->_data[i-offset];
+
+	temp_len = p->_packet_len;
+	p->_packet_len = 0;
+	p->_packet_len = temp_len + write_varint(p, temp_len);
+	p->_packet_id = FINISHED_PACKET_ID;
+	return p;
+}
+
+int write_packet_data(int sfd, const uint8_t data[], size_t len) {
 	int n;
-	if ((n = write(sfd, w._data, w._packet_len)) < 0) {
+	if ((n = write(sfd, data, len)) < 0) {
 		perror("write");
 		return -1;
-	} else if (n != w._packet_len) {
-		fprintf(stderr, "whole packet not written: %d != %d\n", n, w._packet_len);
+	} else if (n != len) {
+		fprintf(stderr, "whole packet not written: %d != %ld\n", n, len);
 		return -1;
 	}
 	return n;
+}
+
+int write_packet(int sfd, const struct send_packet *p) {
+	if (p == NULL)
+		return -1;
+	return write_packet_data(sfd, p->_data, p->_packet_len);
 }
 
 void write_byte(struct send_packet *p, uint8_t b) {
@@ -115,7 +140,7 @@ int write_varint(struct send_packet *p, int i) {
 	return n;
 }
 
-void write_string(struct send_packet *p, int len, char s[]) {
+void write_string(struct send_packet *p, int len, const char s[]) {
 	write_varint(p, len);
 	for (int i = 0; i < len; ++i) {
 		write_byte(p, s[i]);

@@ -1,4 +1,7 @@
 #include <stdint.h>
 
-char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16]);
-int player_id(const char *, const char *, char[36]);
+#include <openssl/evp.h>
+
+#include "conn.h"
+
+int login(int, struct conn *, const uint8_t *, size_t, EVP_PKEY_CTX *);
