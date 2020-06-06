@@ -5,6 +5,7 @@
 
 #include <sys/socket.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #include <openssl/bn.h>
 #include <openssl/sha.h>
@@ -187,7 +188,7 @@ char *read_body(char *resp) {
 	return NULL;
 }
 
-int player_id(const char *username, const char *hash, char id[37]) {
+int player_id(const char *username, const char *hash, char uuid[32]) {
 	char *response = NULL;
 	int response_len = ping_sessionserver(username, hash, &response);
 	if (response_len < 0) {
@@ -212,32 +213,40 @@ int player_id(const char *username, const char *hash, char id[37]) {
 		fprintf(stderr, "no JSON object\n");
 		return -1;
 	}
-	char temp_id[32];
 	for (int i = 1; i < tokens; ++i) {
 		if (t[i].type == JSMN_STRING && t[i].end - t[i].start == 2 && !strncmp(body + t[i].start, "id", 2)) {
 			for (int j = 0; j < 32; ++j)
-				temp_id[j] = body[j + t[i+1].start];
+				uuid[j] = body[j + t[i+1].start];
 			break;
 		}
 	}
 	free(response);
-	if (temp_id[0] == 0) {
+	if (uuid[0] == 0) {
 		fprintf(stderr, "no \"id\" field present in sessionserver response\n");
 		return -1;
 	}
-
-	// format id like a UUID (kinda dumb but it works)
-	strncat(id, temp_id, 8);
-	id[8] = '-';
-	strncat(id, temp_id+8, 4);
-	id[13] = '-';
-	strncat(id, temp_id+12, 4);
-	id[18] = '-';
-	strncat(id, temp_id+16, 4);
-	id[23] = '-';
-	strncat(id, temp_id+20, 12);
-
 	return 0;
+}
+
+/* return a UUID formatted with dashes (kinda dumb implementation but it works xd) */
+void format_uuid(char uuid[32], char formatted[37]) {
+	strncat(formatted, uuid, 8);
+	formatted[8] = '-';
+	strncat(formatted, uuid+8, 4);
+	formatted[13] = '-';
+	strncat(formatted, uuid+12, 4);
+	formatted[18] = '-';
+	strncat(formatted, uuid+16, 4);
+	formatted[23] = '-';
+	strncat(formatted, uuid+20, 12);
+}
+
+/* convert a UUID string to network-order bytes */
+void uuid_bytes(char uuid[33], uint8_t bytes[16]) {
+	BIGNUM *bn = BN_new();
+	BN_hex2bn(&bn, uuid);
+	BN_bn2bin(bn, bytes);
+	BN_free(bn);
 }
 
 int login(int sfd, struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len, EVP_PKEY_CTX *decrypt_ctx) {
@@ -249,15 +258,15 @@ int login(int sfd, struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len,
 		return -1;
 	uint8_t secret[16];
 	if (encryption_response(sfd, decrypt_ctx, verify, secret) < 0)
-		exit(1);
+		return -1;
 	char *hash = mc_hash(pubkey_len, pubkey_der, secret);
 	if (!hash) {
 		fputs("error generating SHA1 hash", stderr);
-		exit(1);
+		return -1;
 	}
-	char id[37] = {0};
-	if (player_id(username, hash, id) < 0)
-		exit(1);
+	char uuid[33] = {0};
+	if (player_id(username, hash, uuid) < 0)
+		return -1;
 	free(hash);
 
 	if (conn_init(c, sfd, secret) < 0) {
@@ -265,6 +274,8 @@ int login(int sfd, struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len,
 		return -1;
 	}
 
-	printf("i think you made it, %s\n", id);
-	return login_success(c, id, username);
+	char formatted_uuid[37] = {0};
+	format_uuid(uuid, formatted_uuid);
+	uuid_bytes(uuid, c->uuid);
+	return login_success(c, formatted_uuid, username);
 }
