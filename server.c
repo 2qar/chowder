@@ -145,14 +145,18 @@ int ping_sessionserver(const char *username, const char *hash, char **response) 
 		ssl_cleanup(ssl_ctx, ssl);
 		return -1;
 	}
-	memset(*response, 0, write_len);
 
-	err = SSL_read(ssl, *response, buf_len);
-	if (err <= 0) {
-		fprintf(stderr, "SSL_read(): %d\n", SSL_get_error(ssl, err));
+	int n = SSL_read(ssl, *response, buf_len);
+	if (n <= 0) {
+		fprintf(stderr, "SSL_read(): %d\n", SSL_get_error(ssl, n));
+		ssl_cleanup(ssl_ctx, ssl);
+		return -1;
+	} else if (n >= buf_len) {
+		fprintf(stderr, "response 2 big: n > %ld\n", buf_len);
 		ssl_cleanup(ssl_ctx, ssl);
 		return -1;
 	}
+	(*response)[n] = 0;
 
 	SSL_shutdown(ssl);
 	ssl_cleanup(ssl_ctx, ssl);
@@ -160,36 +164,32 @@ int ping_sessionserver(const char *username, const char *hash, char **response) 
 	return err;
 }
 
-int read_body(size_t resp_len, char *resp) {
-	char *body_start;
-	for (body_start = resp; body_start - resp < resp_len; ++body_start) {
-		// TODO: kinda hacky
-		//       probably check the request status + actually parse Content-Length for more safety
-		if (*body_start == '\r' && !strncmp(body_start, "\r\n\r\n", 4)) {
-			body_start += 4;
-			break;
-		}
-	}
-	if (body_start - resp == resp_len)
-		return -1;
-
-	size_t body_len = resp_len - (body_start - resp) + 1;
-	return snprintf(resp, body_len, "%s", body_start);
+char *read_body(char *resp) {
+	/* TODO: don't just ignore HTTP status and Content-Length */
+	char *body_start = strstr(resp, "\r\n\r\n");
+	if (body_start != NULL)
+		return body_start + 4;
+	return NULL;
 }
 
 int player_id(const char *username, const char *hash, char uuid[32]) {
-	char *response;
+	char *response = NULL;
 	int response_len = ping_sessionserver(username, hash, &response);
 	if (response_len < 0) {
+		if (response != NULL)
+			free(response);
 		return -1;
 	}
-	size_t body_len = read_body((size_t) response_len, response);
+	char *body = read_body(response);
+	if (body == NULL)
+		return -1;
+	size_t body_len = strlen(body);
 
 	// parse player id
 	jsmn_parser p;
 	jsmntok_t t[128];
 	jsmn_init(&p);
-	int tokens = jsmn_parse(&p, response, body_len, t, 128);
+	int tokens = jsmn_parse(&p, body, body_len, t, 128);
 	if (tokens < 0) {
 		fprintf(stderr, "jsmn_parse() failed: %d\n", tokens);
 		return -1;
@@ -198,9 +198,9 @@ int player_id(const char *username, const char *hash, char uuid[32]) {
 		return -1;
 	}
 	for (int i = 1; i < tokens; ++i) {
-		if (t[i].type == JSMN_STRING && t[i].end - t[i].start == 2 && !strncmp(response + t[i].start, "id", 2)) {
+		if (t[i].type == JSMN_STRING && t[i].end - t[i].start == 2 && !strncmp(body + t[i].start, "id", 2)) {
 			for (int j = 0; j < 32; ++j)
-				uuid[j] = response[j + t[i+1].start];
+				uuid[j] = body[j + t[i+1].start];
 			break;
 		}
 	}
