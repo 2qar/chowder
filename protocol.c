@@ -34,6 +34,25 @@ int handshake(int sfd) {
 	return next_state;
 }
 
+int server_list_ping(int sfd) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x00);
+
+	const size_t json_len = 1000;
+	char json[json_len];
+	/* TODO: don't hardcode, insert state instead (once state exists */
+	int n = snprintf(json, json_len-1, "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
+		"\"players\": { \"max\": 4, \"online\": 0, \"sample\": [] },"
+		"\"description\": { \"text\": \"description\" } }");
+	if (n >= json_len - 1) {
+		fprintf(stderr, "attempted to write %d bytes to JSON buffer, consider increasing length\n", n);
+		return -1;
+	}
+	write_string(&p, n, json);
+
+	return write_packet(sfd, finalize_packet(&p));
+}
+
 int login_start(int sfd, char username[]) {
 	struct recv_packet *p = malloc(sizeof(struct recv_packet));
 	if (parse_packet(p, sfd) < 0)
@@ -124,4 +143,24 @@ int login_success(struct conn *c, const char id[36], const char username[16]) {
 	write_string(&p, 36, id);
 	write_string(&p, 16, username);
 	return write_encrypted_packet(c, finalize_packet(&p));
+}
+
+/* TODO: make ping + pong work when connection is encrypted */
+int ping(struct conn *c, uint8_t l[8]) {
+	struct recv_packet p = {0};
+	if (parse_packet(&p, c->_sfd) < 0)
+		return -1;
+
+	for (int i = 0; i < 8; ++i)
+		l[i] = read_byte(&p);
+	return 0;
+}
+
+int pong(struct conn *c, uint8_t l[8]) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x01);
+
+	for (int i = 0; i < 8; ++i)
+		write_byte(&p, l[i]);
+	return write_packet(c->_sfd, finalize_packet(&p));
 }

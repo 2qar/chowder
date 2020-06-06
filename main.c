@@ -94,7 +94,12 @@ int main() {
 	if ((conn = accept(sfd, NULL, NULL)) != -1) {
 		int next_state = handshake(conn);
 		// TODO: handle packet status 1, server list ping
-		assert(next_state == 2);
+		if (next_state == 1) {
+			handle_server_list_ping(conn);
+			close(conn);
+			/* TODO: clean up, dummy */
+			return 0;
+		}
 
 		struct conn c = {0};
 		EVP_PKEY_CTX *login_decrypt_ctx = EVP_PKEY_CTX_dup(ctx);
