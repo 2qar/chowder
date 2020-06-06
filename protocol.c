@@ -118,10 +118,10 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uin
 	return 0;
 }
 
-int login_success(struct conn *c, const char id[36], const char username[16]) {
+int login_success(struct conn *c, const char uuid[36], const char username[16]) {
 	struct send_packet p = {0};
 	make_packet(&p, 0x02);
-	write_string(&p, 36, id);
+	write_string(&p, 36, uuid);
 	write_string(&p, 16, username);
 	return write_encrypted_packet(c, finalize_packet(&p));
 }
