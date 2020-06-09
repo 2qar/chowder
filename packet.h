@@ -9,10 +9,10 @@
 struct recv_packet {
 	int packet_id;
 	int _packet_len;
-	uint8_t _data[1000];
+	uint8_t _data[MAX_PACKET_LEN];
 	int _index;
 };
-int parse_packet(struct recv_packet *, int);
+int parse_packet(struct recv_packet *, int sfd);
 uint8_t read_byte(struct recv_packet *p);
 int read_varint(struct recv_packet *, int *);
 int read_string(struct recv_packet *, char[]);

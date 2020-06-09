@@ -7,27 +7,40 @@
 
 #define FINISHED_PACKET_ID 255
 
-int _read_varint(int sfd, int *v) {
+ssize_t packet_read_byte(void *p) {
+	return (ssize_t) read_byte((struct recv_packet *) p);
+}
+
+ssize_t sfd_read_byte(void *sfd) {
+	uint8_t b;
+	if (read(*((int *) sfd), &b, (size_t) 1) < 0)
+		return -1;
+	else
+		return (ssize_t) b;
+}
+
+int read_varint_gen(ssize_t (*read_byte)(void *), void *src, int *v) {
 	int n = 0;
 	*v = 0;
 	uint8_t b;
 	do {
-		// FIXME: handle read == 0
-		if (read(sfd, &b, (size_t) 1) < 0) {
+		if ((b = (*read_byte)(src)) < 0)
 			return -1;
-		}
 		*v |= ((b & 0x7f) << (7 * n++));
 	} while ((b & 0x80) != 0);
 
 	return n;
 }
 
+int read_varint_sfd(int sfd, int *v) {
+	return read_varint_gen(sfd_read_byte, (void *)(&sfd), v);
+}
 
 int parse_packet(struct recv_packet *p, int sfd) {
-	if (_read_varint(sfd, &(p->_packet_len)) < 0)
+	if (read_varint_sfd(sfd, &(p->_packet_len)) < 0)
 		return -1;
 	int id_len;
-	if ((id_len = _read_varint(sfd, &(p->packet_id))) < 0)
+	if ((id_len = read_varint_sfd(sfd, &(p->packet_id))) < 0)
 		return -1;
 
 	int n;
@@ -44,17 +57,8 @@ uint8_t read_byte(struct recv_packet *p) {
 	return p->_data[p->_index++];
 }
 
-// TODO: make _read_varint take a next() function for the next byte instead of copypasta into this function
 int read_varint(struct recv_packet *p, int *v) {
-	int n = 0;
-	*v = 0;
-	uint8_t b;
-	do {
-		b = read_byte(p);
-		*v |= ((b & 0x7f) << (7 * n++));
-	} while ((b & 0x80) != 0);
-
-	return n;
+	return read_varint_gen(&packet_read_byte, (void *) p, v);
 }
 
 // TODO: take buffer length as an argument for safety
