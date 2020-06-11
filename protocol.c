@@ -142,13 +142,12 @@ int login_success(struct conn *c, const char uuid[36], const char username[16]) 
 	make_packet(&p, 0x02);
 	write_string(&p, 36, uuid);
 	write_string(&p, 16, username);
-	return write_encrypted_packet(c, finalize_packet(&p));
+	return conn_write_packet(c, finalize_packet(&p));
 }
 
-/* TODO: make ping + pong work when connection is encrypted */
 int ping(struct conn *c, uint8_t l[8]) {
 	struct recv_packet p = {0};
-	if (parse_packet(&p, c->_sfd) < 0)
+	if (conn_parse_packet(c, &p) < 0)
 		return -1;
 
 	for (int i = 0; i < 8; ++i)
@@ -162,5 +161,5 @@ int pong(struct conn *c, uint8_t l[8]) {
 
 	for (int i = 0; i < 8; ++i)
 		write_byte(&p, l[i]);
-	return write_packet(c->_sfd, finalize_packet(&p));
+	return conn_write_packet(c, finalize_packet(&p));
 }

@@ -37,3 +37,15 @@ int write_encrypted_packet(struct conn *c, const struct send_packet *p) {
 
 	return write_packet_data(c->_sfd, out, out_len);
 }
+
+int conn_parse_packet(struct conn *c, struct recv_packet *p) {
+	if (c->_decrypt_ctx != NULL)
+		return parse_encrypted_packet(c, p);
+	return parse_packet(p, c->_sfd);
+}
+
+int conn_write_packet(struct conn *c, const struct send_packet *p) {
+	if (c->_encrypt_ctx != NULL)
+		return write_encrypted_packet(c, p);
+	return write_packet(c->_sfd, p);
+}
