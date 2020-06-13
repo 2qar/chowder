@@ -4,7 +4,9 @@
 #include <unistd.h>
 #include <stdint.h>
 
-#define MAX_PACKET_LEN 1000
+#include "nbt.h"
+
+#define MAX_PACKET_LEN 10000
 
 struct recv_packet {
 	int packet_id;
@@ -28,7 +30,13 @@ struct send_packet *finalize_packet(struct send_packet *);
 int write_packet_data(int, const uint8_t data[], size_t len);
 int write_packet(int, const struct send_packet *);
 void write_byte(struct send_packet *, uint8_t);
+void write_short(struct send_packet *, int16_t);
 int write_varint(struct send_packet *, int);
 void write_string(struct send_packet *, int, const char[]);
+void write_int(struct send_packet *, int32_t);
+void write_float(struct send_packet *, float);
+void write_double(struct send_packet *, double);
+void write_long(struct send_packet *, uint64_t);
+void write_nbt(struct send_packet *, struct nbt *);
 
 #endif

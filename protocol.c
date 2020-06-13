@@ -6,6 +6,7 @@
 #include <openssl/err.h>
 
 #include "protocol.h"
+#include "nbt.h"
 
 int handshake(int sfd) {
 	struct recv_packet *p = malloc(sizeof(struct recv_packet));
@@ -145,6 +146,9 @@ int login_success(struct conn *c, const char uuid[36], const char username[16]) 
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
+/* FIXME: ping + pong should take the file descriptor instead of a conn
+ *        because they're only ever used for server list ping.
+ *        Keep alive packets are the ones used in gameplay, not these. */
 int ping(struct conn *c, uint8_t l[8]) {
 	struct recv_packet p = {0};
 	if (conn_parse_packet(c, &p) < 0)
@@ -162,4 +166,169 @@ int pong(struct conn *c, uint8_t l[8]) {
 	for (int i = 0; i < 8; ++i)
 		write_byte(&p, l[i]);
 	return conn_write_packet(c, finalize_packet(&p));
+}
+
+int join_game(struct conn *c) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x26);
+
+	/* TODO: keep track of EID for each player */
+	write_int(&p, 123);
+	/* gamemode */
+	write_byte(&p, 1);
+	/* dimension */
+	write_int(&p, 0);
+
+	/* TODO: pass a valid SHA-256 hash */
+	write_long(&p, 0);
+
+	/* max players, ignored */
+	write_byte(&p, 0);
+
+	char level_type[16] = "default";
+	write_string(&p, 16, level_type);
+
+	/* view distance */
+	write_varint(&p, 10);
+
+	/* reduced debug info */
+	write_byte(&p, false);
+
+	/* enable respawn screen */
+	write_byte(&p, true);
+
+	return conn_write_packet(c, finalize_packet(&p));
+}
+
+int window_items(struct conn *c) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x15);
+
+	/* TODO: keep track of player inventory and actually send it
+	 *       instead of sending an empty inv */
+	for (int i = 0; i < 45; ++i)
+		write_byte(&p, 0);
+	/* slot count */
+	write_short(&p, 0);
+	/* TODO: slot array https://wiki.vg/Slot_Data */
+
+	return conn_write_packet(c, finalize_packet(&p));
+}
+
+int spawn_position(struct conn *c, uint16_t x, uint16_t y, uint16_t z) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x4E);
+
+	/* https://wiki.vg/Protocol#Position */
+	uint64_t pos = (((uint64_t)x & 0x3FFFFFF) << 38) | ((z & 0x3FFFFFF) << 12) | (y & 0xFFF);
+	write_long(&p, pos);
+	return conn_write_packet(c, finalize_packet(&p));
+}
+
+/* FIXME: client reading 1860 extra bytes ??? */
+int chunk_data(struct conn *c, int x, int y, bool full) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x22);
+
+	write_int(&p, x);
+	write_int(&p, y);
+	write_byte(&p, full);
+
+	/* primary bit mask */
+	write_varint(&p, 1);
+
+	struct nbt n = {0};
+	nbt_init(&n, "");
+	int64_t heightmaps[36] = {0};
+	nbt_write_long_array(&n, "MOTION_BLOCKING", 36, heightmaps);
+	nbt_finish(&n);
+	write_nbt(&p, &n);
+
+	if (full)
+		for (int i = 0; i < 1024; ++i)
+			/* TODO: don't just write desert for every biome xd */
+			write_int(&p, 2);
+
+	struct send_packet block_data = {0};
+
+	uint16_t block_count = 256;
+	write_short(&block_data, block_count);
+	const uint8_t bits_per_block = 8;
+	write_byte(&block_data, bits_per_block);
+
+	/* palette */
+	uint8_t palette_len = 2;
+	write_varint(&block_data, palette_len);
+	uint8_t palette[] = { 0, 14 };
+	for (int i = 0; i < palette_len; ++i)
+		write_varint(&block_data, palette[i]);
+
+	/* data array length */
+	write_varint(&block_data, 512 * bits_per_block);
+	/* write the blocks */
+	uint64_t layer;
+	for (int i = 0; i < 512; ++i) {
+		layer = 0;
+		if (i < 32)
+			for (int b = 0; b < 64 / bits_per_block; ++b)
+				layer |= ((uint64_t) palette[1] << (b * bits_per_block));
+		write_long(&block_data, layer);
+	}
+
+	/* chunk sections length */
+	write_varint(&p, block_data._packet_len);
+	/* chunk junk */
+	for (int i = 0; i < block_data._packet_len; ++i)
+		write_byte(&p, block_data._data[i]);
+
+	/* # of block entities */
+	/* TODO: implement block entities */
+	write_varint(&p, 0);
+
+	return conn_write_packet(c, finalize_packet(&p));
+}
+
+int player_position_look(struct conn *c, int *server_teleport_id) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x36);
+
+	double x = 0;
+	double y = 0;
+	double z = 0;
+	write_double(&p, x);
+	write_double(&p, y);
+	write_double(&p, z);
+
+	float yaw = 0;
+	float pitch = 0;
+	write_float(&p, yaw);
+	write_float(&p, pitch);
+
+	uint8_t flags = 0;
+	write_byte(&p, flags);
+
+	/* TODO: randomize it, probably */
+	*server_teleport_id = 123;
+	write_varint(&p, *server_teleport_id);
+
+	return conn_write_packet(c, finalize_packet(&p));
+}
+
+int teleport_confirm(struct conn *c, int server_teleport_id) {
+	struct recv_packet p;
+	if (conn_parse_packet(c, &p) < 0) {
+		fprintf(stderr, "reading teleport confirm packet failed\n");
+		return -1;
+	}
+
+	int teleport_id;
+	if (read_varint(&p, &teleport_id) < 0) {
+		fprintf(stderr, "reading teleport id failed\n");
+		return -1;
+	} else if (teleport_id != server_teleport_id) {
+		fprintf(stderr, "teleport ID mismatch: %d != %d\n", teleport_id, server_teleport_id);
+		return -1;
+	}
+
+	return 0;
 }

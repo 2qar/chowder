@@ -109,6 +109,29 @@ int main() {
 			fprintf(stderr, "error logging in: %d\n", err);
 			exit(1);
 		}
+
+		join_game(&c);
+		puts("joined the game");
+		//window_items(&c);
+
+		for (int y = 0; y < 7; ++y)
+			for (int x = 0; x < 7; ++x)
+				chunk_data(&c, x, y, true);;
+		puts("wrote the chunks");
+
+		if (spawn_position(&c, 0, 0, 0) < 0) {
+			fprintf(stderr, "error sending spawn position\n");
+			exit(1);
+		}
+		int teleport_id;
+		if (player_position_look(&c, &teleport_id) < 0) {
+			fprintf(stderr, "error sending position + look\n");
+			exit(1);
+		}
+
+		puts("sent all of the shit, just waiting on a teleport confirm");
+		printf("teleport confirm: %d\n", teleport_confirm(&c, teleport_id));
+
 		EVP_PKEY_CTX_free(login_decrypt_ctx);
 		conn_finish(&c);
 	} else {

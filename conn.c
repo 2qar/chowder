@@ -24,6 +24,7 @@ void conn_finish(struct conn *c) {
 	EVP_CIPHER_CTX_free(c->_encrypt_ctx);
 }
 
+/* FIXME: this segfaults somewhere */
 int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
 	/* TODO: maybe store this in the conn (pretty sure it wont change xd) */
 	int block_size = EVP_CIPHER_CTX_block_size(c->_decrypt_ctx);

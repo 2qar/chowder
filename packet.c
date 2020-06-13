@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #include "packet.h"
 
@@ -22,6 +24,7 @@ ssize_t sfd_read_byte(void *sfd) {
 int read_varint_gen(ssize_t (*read_byte)(void *), void *src, int *v) {
 	int n = 0;
 	*v = 0;
+	/* FIXME: this needs to be a normal, signed byte */
 	uint8_t b;
 	do {
 		if ((b = (*read_byte)(src)) < 0)
@@ -126,7 +129,23 @@ int write_packet(int sfd, const struct send_packet *p) {
 }
 
 void write_byte(struct send_packet *p, uint8_t b) {
+	/* TODO: make _data a pointer and realloc(3) when
+	 *       p->_packet_len exceeds the buffer length */
 	p->_data[p->_packet_len++] = b;
+}
+
+/* FIXME: hacky as fuck, assumes the pc is little-endian
+ *        and relies on casting other types to uint8_t *
+ */
+void write_bytes(struct send_packet *p, uint8_t *b, int n) {
+	for (int i = n - 1; i >= 0; --i)
+		write_byte(p, b[i]);
+}
+
+void write_short(struct send_packet *p, int16_t s) {
+	uint16_t ns = htons(s);
+	memcpy(p->_data, &ns, sizeof(uint16_t));
+	p->_packet_len += sizeof(uint16_t);
 }
 
 int write_varint(struct send_packet *p, int i) {
@@ -149,4 +168,28 @@ void write_string(struct send_packet *p, int len, const char s[]) {
 	for (int i = 0; i < len; ++i) {
 		write_byte(p, s[i]);
 	}
+}
+
+void write_int(struct send_packet *p, int32_t i) {
+	uint32_t ni = htonl(i);
+	memcpy(p->_data + p->_packet_len, &ni, 4);
+	p->_packet_len += 4;
+}
+
+/* FIXME: write_float and write_double assume this pc is little endian */
+void write_float(struct send_packet *p, float f) {
+	write_bytes(p, (uint8_t *) &f, sizeof(float));
+}
+
+void write_double(struct send_packet *p, double d) {
+	write_bytes(p, (uint8_t *) &d, sizeof(double));
+}
+
+void write_long(struct send_packet *p, uint64_t l) {
+	write_bytes(p, (uint8_t *) &l, sizeof(uint64_t));
+}
+
+void write_nbt(struct send_packet *p, struct nbt *n) {
+	for (int i = 0; i < n->_index; ++i)
+		write_byte(p, n->_data[i]);
 }
