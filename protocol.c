@@ -225,7 +225,6 @@ int spawn_position(struct conn *c, uint16_t x, uint16_t y, uint16_t z) {
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
-/* FIXME: client reading 1860 extra bytes ??? */
 int chunk_data(struct conn *c, int x, int y, bool full) {
 	struct send_packet p = {0};
 	make_packet(&p, 0x22);
