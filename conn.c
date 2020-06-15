@@ -33,6 +33,9 @@ int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
 	if (n < 0) {
 		perror("read");
 		return -1;
+	} else if (n == 0) {
+		fprintf(stderr, "client sent 0 bytes, connection probably closed\n");
+		return -1;
 	}
 
 	int outl = MAX_PACKET_LEN;
