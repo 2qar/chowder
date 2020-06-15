@@ -146,12 +146,9 @@ int login_success(struct conn *c, const char uuid[36], const char username[16]) 
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
-/* FIXME: ping + pong should take the file descriptor instead of a conn
- *        because they're only ever used for server list ping.
- *        Keep alive packets are the ones used in gameplay, not these. */
-int ping(struct conn *c, uint8_t l[8]) {
+int ping(int sfd, uint8_t l[8]) {
 	struct recv_packet p = {0};
-	if (conn_parse_packet(c, &p) < 0)
+	if (parse_packet(&p, sfd) < 0)
 		return -1;
 
 	for (int i = 0; i < 8; ++i)
@@ -159,13 +156,13 @@ int ping(struct conn *c, uint8_t l[8]) {
 	return 0;
 }
 
-int pong(struct conn *c, uint8_t l[8]) {
+int pong(int sfd, uint8_t l[8]) {
 	struct send_packet p = {0};
 	make_packet(&p, 0x01);
 
 	for (int i = 0; i < 8; ++i)
 		write_byte(&p, l[i]);
-	return conn_write_packet(c, finalize_packet(&p));
+	return write_packet(sfd, finalize_packet(&p));
 }
 
 int join_game(struct conn *c) {

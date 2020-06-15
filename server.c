@@ -24,12 +24,10 @@ int handle_server_list_ping(int sfd) {
 	if (server_list_ping(sfd) < 0)
 		return -1;
 
-	struct conn c = {0};
-	c._sfd = sfd;
 	uint8_t l[8] = {0};
-	if (ping(&c, l) < 0)
+	if (ping(sfd, l) < 0)
 		return -1;
-	return pong(&c, l);
+	return pong(sfd, l);
 }
 
 char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16]) {

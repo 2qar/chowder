@@ -12,9 +12,8 @@ int login_start(int, char[]);
 int encryption_request(int, size_t, const unsigned char *, uint8_t[4]);
 int encryption_response(int, EVP_PKEY_CTX *, const uint8_t[4], uint8_t[16]);
 int login_success(struct conn *, const char[36], const char[16]);
-
-int ping(struct conn *, uint8_t[8]);
-int pong(struct conn *, uint8_t[8]);
+int ping(int sfd, uint8_t id[8]);
+int pong(int sfd, uint8_t id[8]);
 
 int join_game(struct conn *);
 int window_items(struct conn *);
