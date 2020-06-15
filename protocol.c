@@ -39,7 +39,7 @@ int server_list_ping(int sfd) {
 	struct send_packet p = {0};
 	make_packet(&p, 0x00);
 
-	const size_t json_len = 1000;
+	const int json_len = 1000;
 	char json[json_len];
 	/* TODO: don't hardcode, insert state instead (once state exists */
 	int n = snprintf(json, json_len-1, "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
@@ -75,7 +75,7 @@ int encryption_request(int sfd, size_t der_len, const unsigned char *der, uint8_
 	write_string(p, 20, server_id);
 
 	write_varint(p, der_len);
-	for (int i = 0; i < der_len; ++i)
+	for (size_t i = 0; i < der_len; ++i)
 		write_byte(p, der[i]);
 
 	/* verify token */
@@ -277,7 +277,7 @@ int chunk_data(struct conn *c, int x, int y, bool full) {
 	/* chunk sections length */
 	write_varint(&p, block_data._packet_len);
 	/* chunk junk */
-	for (int i = 0; i < block_data._packet_len; ++i)
+	for (unsigned int i = 0; i < block_data._packet_len; ++i)
 		write_byte(&p, block_data._data[i]);
 
 	/* # of block entities */

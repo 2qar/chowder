@@ -167,7 +167,7 @@ int ping_sessionserver(const char *username, const char *hash, char **response) 
 		fprintf(stderr, "SSL_read(): %d\n", SSL_get_error(ssl, n));
 		ssl_cleanup(ssl_ctx, ssl);
 		return -1;
-	} else if (n >= buf_len) {
+	} else if ((size_t)n >= buf_len) {
 		fprintf(stderr, "response 2 big: n > %ld\n", buf_len);
 		ssl_cleanup(ssl_ctx, ssl);
 		return -1;

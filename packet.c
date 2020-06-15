@@ -25,7 +25,7 @@ int read_varint_gen(ssize_t (*read_byte)(void *), void *src, int *v) {
 	int n = 0;
 	*v = 0;
 	/* FIXME: this needs to be a normal, signed byte */
-	uint8_t b;
+	ssize_t b;
 	do {
 		if ((b = (*read_byte)(src)) < 0)
 			return -1;
@@ -110,19 +110,19 @@ struct send_packet *finalize_packet(struct send_packet *p) {
 	return p;
 }
 
-int write_packet_data(int sfd, const uint8_t data[], size_t len) {
-	int n;
+ssize_t write_packet_data(int sfd, const uint8_t data[], size_t len) {
+	ssize_t n;
 	if ((n = write(sfd, data, len)) < 0) {
 		perror("write");
 		return -1;
-	} else if (n != len) {
-		fprintf(stderr, "whole packet not written: %d != %ld\n", n, len);
+	} else if ((size_t)n != len) {
+		fprintf(stderr, "whole packet not written: %ld != %ld\n", n, len);
 		return -1;
 	}
 	return n;
 }
 
-int write_packet(int sfd, const struct send_packet *p) {
+ssize_t write_packet(int sfd, const struct send_packet *p) {
 	if (p == NULL)
 		return -1;
 	return write_packet_data(sfd, p->_data, p->_packet_len);

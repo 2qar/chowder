@@ -1,5 +1,5 @@
 CC=cc
-CFLAGS=-Wall
+CFLAGS=-Wall -Wextra -Werror -pedantic
 LIBSSL=`pkg-config --libs openssl`
 TARGET=chowder
 

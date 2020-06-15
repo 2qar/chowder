@@ -60,7 +60,7 @@ int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
 	return p->_packet_len;
 }
 
-int write_encrypted_packet(struct conn *c, const struct send_packet *p) {
+ssize_t write_encrypted_packet(struct conn *c, const struct send_packet *p) {
 	int out_len = p->_packet_len + EVP_CIPHER_CTX_block_size(c->_encrypt_ctx);
 	uint8_t out[out_len];
 	if (!EVP_CipherUpdate(c->_encrypt_ctx, out, &out_len, p->_data, p->_packet_len)) {
@@ -77,7 +77,7 @@ int conn_parse_packet(struct conn *c, struct recv_packet *p) {
 	return parse_packet(p, c->_sfd);
 }
 
-int conn_write_packet(struct conn *c, const struct send_packet *p) {
+ssize_t conn_write_packet(struct conn *c, const struct send_packet *p) {
 	if (c->_encrypt_ctx != NULL)
 		return write_encrypted_packet(c, p);
 	return write_packet(c->_sfd, p);

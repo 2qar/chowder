@@ -44,7 +44,7 @@ int main() {
 	/* RSA keygen */
 	EVP_PKEY *pkey = NULL;
 	EVP_PKEY_CTX *ctx;
-	if ((ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL)) <= 0) {
+	if (!(ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL))) {
 		fprintf(stderr, "EVP_PKEY_CTX_new_id(): %lu\n", ERR_get_error());
 		exit(1);
 	}
