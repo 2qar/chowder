@@ -314,15 +314,9 @@ int player_position_look(struct conn *c, int *server_teleport_id) {
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
-int teleport_confirm(struct conn *c, int server_teleport_id) {
-	struct recv_packet p;
-	if (conn_parse_packet(c, &p) < 0) {
-		fprintf(stderr, "reading teleport confirm packet failed\n");
-		return -1;
-	}
-
+int teleport_confirm(struct recv_packet *p, int server_teleport_id) {
 	int teleport_id;
-	if (read_varint(&p, &teleport_id) < 0) {
+	if (read_varint(p, &teleport_id) < 0) {
 		fprintf(stderr, "reading teleport id failed\n");
 		return -1;
 	} else if (teleport_id != server_teleport_id) {

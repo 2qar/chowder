@@ -130,7 +130,20 @@ int main() {
 		}
 
 		puts("sent all of the shit, just waiting on a teleport confirm");
-		printf("teleport confirm: %d\n", teleport_confirm(&c, teleport_id));
+
+		struct recv_packet p = {0};
+		for (;;) {
+			if (conn_parse_packet(&c, &p) < 0)
+				break;
+			switch (p.packet_id) {
+				case 0x00:
+					printf("teleport confirm: %d\n", teleport_confirm(&p, teleport_id));
+					break;
+				default:
+					printf("unimplemented packet %02x\n", p.packet_id);
+					break;
+			}
+		}
 
 		EVP_PKEY_CTX_free(login_decrypt_ctx);
 		conn_finish(&c);
