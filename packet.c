@@ -144,7 +144,7 @@ void write_bytes(struct send_packet *p, uint8_t *b, int n) {
 
 void write_short(struct send_packet *p, int16_t s) {
 	uint16_t ns = htons(s);
-	memcpy(p->_data, &ns, sizeof(uint16_t));
+	memcpy(p->_data + p->_packet_len, &ns, sizeof(uint16_t));
 	p->_packet_len += sizeof(uint16_t);
 }
 
