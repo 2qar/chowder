@@ -50,7 +50,6 @@ int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
 		return -1;
 	if (read_varint(p, &(p->packet_id)) < 0)
 		return -1;
-	p->_index = 0;
 
 	/* pop the parsed packet off the read buffer */
 	size_t read_len = p->_packet_len + n + block_size;
