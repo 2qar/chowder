@@ -111,7 +111,10 @@ int main() {
 
 		join_game(&c);
 		puts("joined the game");
-		//window_items(&c);
+		if (window_items(&c) < 0) {
+			fprintf(stderr, "error sending window items\n");
+			exit(1);
+		}
 
 		for (int y = 0; y < 7; ++y)
 			for (int x = 0; x < 7; ++x)

@@ -201,10 +201,8 @@ int window_items(struct conn *c) {
 	struct send_packet p = {0};
 	make_packet(&p, 0x15);
 
-	/* TODO: keep track of player inventory and actually send it
-	 *       instead of sending an empty inv */
-	for (int i = 0; i < 45; ++i)
-		write_byte(&p, 0);
+	/* window ID */
+	write_byte(&p, 0);
 	/* slot count */
 	write_short(&p, 0);
 	/* TODO: slot array https://wiki.vg/Slot_Data */
