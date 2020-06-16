@@ -81,6 +81,13 @@ void read_ushort(struct recv_packet *p, uint16_t *s) {
 	*s += read_byte(p);
 }
 
+void read_long(struct recv_packet *p, uint64_t *l) {
+	uint64_t hl = 0;
+	for (int i = 7; i >= 0; --i)
+		hl |= read_byte(p) << (i * 8);
+	*l = hl;
+}
+
 void make_packet(struct send_packet *p, int id) {
 	p->_packet_len = 0;
 	p->_packet_id = id;

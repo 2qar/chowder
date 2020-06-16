@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 #include <openssl/evp.h>
 #include <openssl/sha.h>
@@ -318,5 +319,27 @@ int teleport_confirm(struct recv_packet *p, int server_teleport_id) {
 		return -1;
 	}
 
+	return 0;
+}
+
+int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x21);
+
+	*id = rand();
+	write_long(&p, *id);
+	*t = time(NULL);
+
+	return conn_write_packet(c, finalize_packet(&p));
+}
+
+int keep_alive_serverbound(struct recv_packet *p, uint64_t id) {
+	uint64_t client_id;
+	read_long(p, &client_id);
+	/* maybe this function isn't the right place for handling the ID mismatch */
+	if (client_id != id) {
+		fprintf(stderr, "keep alive ID mismatch\n");
+		return -1;
+	}
 	return 0;
 }

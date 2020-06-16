@@ -21,3 +21,5 @@ int spawn_position(struct conn *, uint16_t, uint16_t, uint16_t);
 int chunk_data(struct conn *, int, int, bool);
 int player_position_look(struct conn *, int *teleport_id);
 int teleport_confirm(struct recv_packet *, int server_teleport_id);
+int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id);
+int keep_alive_serverbound(struct recv_packet *p, uint64_t id);

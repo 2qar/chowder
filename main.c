@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <poll.h>
 
 #include <openssl/rsa.h>
 #include <openssl/evp.h>
@@ -134,16 +135,44 @@ int main() {
 		puts("sent all of the shit, just waiting on a teleport confirm");
 
 		struct recv_packet p = {0};
+		struct pollfd pfd = { .fd = conn, .events = POLLIN };
+
+		uint64_t keep_alive_id;
+		time_t keep_alive_time = 0;
+		time_t last_client_response = time(NULL);
 		for (;;) {
-			if (conn_parse_packet(&c, &p) < 0)
+			int polled = poll(&pfd, 1, 100);
+			if (polled > 0 && (pfd.revents & POLLIN)) {
+				if (conn_parse_packet(&c, &p) < 0)
+					break;
+				switch (p.packet_id) {
+					case 0x00:
+						printf("teleport confirm: %d\n", teleport_confirm(&p, teleport_id));
+						break;
+					case 0x0F:
+						if (keep_alive_serverbound(&p, keep_alive_id) < 0)
+							break;
+						last_client_response = time(NULL);
+						break;
+					default:
+						printf("unimplemented packet 0x%02x\n", p.packet_id);
+						break;
+				}
+			} else if (polled < 0) {
+				perror("poll");
 				break;
-			switch (p.packet_id) {
-				case 0x00:
-					printf("teleport confirm: %d\n", teleport_confirm(&p, teleport_id));
+			}
+
+			if (time(NULL) - last_client_response >= 30) {
+				puts("client hasn't sent a keep alive in a while, disconnecting");
+				break;
+			}
+
+			if (time(NULL) - keep_alive_time > 15) {
+				if (keep_alive_clientbound(&c, &keep_alive_time, &keep_alive_id) < 0) {
+					fprintf(stderr, "error sending keep alive\n");
 					break;
-				default:
-					printf("unimplemented packet %02x\n", p.packet_id);
-					break;
+				}
 			}
 		}
 
