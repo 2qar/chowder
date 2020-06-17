@@ -178,7 +178,6 @@ int join_game(struct conn *c) {
 	write_int(&p, 0);
 
 	/* TODO: pass a valid SHA-256 hash */
-	/* FIXME: this might be why the client can't log in */
 	write_long(&p, 0);
 
 	/* max players, ignored */
@@ -290,7 +289,7 @@ int chunk_data(struct conn *c, int x, int y, bool full) {
 
 	uint16_t block_count = 256;
 	write_short(&block_data, block_count);
-	const uint8_t bits_per_block = 8;
+	const uint8_t bits_per_block = 14;
 	write_byte(&block_data, bits_per_block);
 
 	/* palette */
@@ -301,14 +300,15 @@ int chunk_data(struct conn *c, int x, int y, bool full) {
 		write_varint(&block_data, palette[i]);
 
 	/* data array length */
+	/* FIXME: pretty sure this calculation is wrong for anything
+	 *        other than bits_per_block = 14 */
 	write_varint(&block_data, 512 * bits_per_block);
 	/* write the blocks */
 	uint64_t layer;
 	for (int i = 0; i < 512; ++i) {
 		layer = 0;
-		if (i < 32)
-			for (int b = 0; b < 64 / bits_per_block; ++b)
-				layer |= ((uint64_t) palette[1] << (b * bits_per_block));
+		for (int b = 0; b < 64 / bits_per_block; ++b)
+			layer |= ((uint64_t) (i < 32) << (b * bits_per_block));
 		write_long(&block_data, layer);
 	}
 

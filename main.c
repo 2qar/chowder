@@ -127,7 +127,7 @@ int main() {
 
 		for (int y = 0; y < 7; ++y)
 			for (int x = 0; x < 7; ++x)
-				chunk_data(&c, x, y, true);;
+				chunk_data(&c, x, y, true);
 		puts("wrote the chunks");
 
 		if (spawn_position(&c, 0, 0, 0) < 0) {
