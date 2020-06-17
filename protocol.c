@@ -178,6 +178,7 @@ int join_game(struct conn *c) {
 	write_int(&p, 0);
 
 	/* TODO: pass a valid SHA-256 hash */
+	/* FIXME: this might be why the client can't log in */
 	write_long(&p, 0);
 
 	/* max players, ignored */
@@ -196,6 +197,39 @@ int join_game(struct conn *c) {
 	write_byte(&p, true);
 
 	return conn_write_packet(c, finalize_packet(&p));
+}
+
+int client_settings(struct conn *c) {
+	struct recv_packet p = {0};
+	if (conn_parse_packet(c, &p) < 0)
+		return -1;
+
+	char locale[17] = {0};
+	if (read_string(&p, locale) < 0)
+		return -1;
+	puts(locale);
+
+	uint8_t view_distance = read_byte(&p);
+	printf("view distance: %d\n", view_distance);
+
+	int chat_mode;
+	if (read_varint(&p, &chat_mode) < 0)
+		return -1;
+	printf("chat mode: %d\n", chat_mode);
+
+	uint8_t chat_colors = read_byte(&p);
+	printf("chat colors: %d\n", chat_colors);
+
+	uint8_t displayed_skin = read_byte(&p);
+	printf("displayed skin shit: %d\n", displayed_skin);
+
+	int main_hand;
+	if (read_varint(&p, &main_hand) < 0)
+		return -1;
+	printf("main hand: %d\n", main_hand);
+
+	return 0;
+
 }
 
 int window_items(struct conn *c) {

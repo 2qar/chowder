@@ -112,12 +112,16 @@ int main() {
 
 		join_game(&c);
 		puts("joined the game");
-		if (window_items(&c) < 0) {
-			fprintf(stderr, "error sending window items\n");
+		if (client_settings(&c) < 0) {
+			fprintf(stderr, "error reading client settings\n");
 			exit(1);
 		}
 		if (held_item_change_clientbound(&c, 0) < 0) {
 			fprintf(stderr, "error sending held item change\n");
+			exit(1);
+		}
+		if (window_items(&c) < 0) {
+			fprintf(stderr, "error sending window items\n");
 			exit(1);
 		}
 
@@ -144,6 +148,7 @@ int main() {
 		uint64_t keep_alive_id;
 		time_t keep_alive_time = 0;
 		time_t last_client_response = time(NULL);
+		/* FIXME: after client connects, the F3 menu is stuck "waiting for chunk" */
 		for (;;) {
 			int polled = poll(&pfd, 1, 100);
 			if (polled > 0 && (pfd.revents & POLLIN)) {

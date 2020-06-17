@@ -16,6 +16,7 @@ int ping(int sfd, uint8_t id[8]);
 int pong(int sfd, uint8_t id[8]);
 
 int join_game(struct conn *);
+int client_settings(struct conn *);
 int window_items(struct conn *);
 int held_item_change_clientbound(struct conn *, uint8_t slot);
 int spawn_position(struct conn *, uint16_t, uint16_t, uint16_t);
