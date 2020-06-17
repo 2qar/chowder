@@ -116,6 +116,10 @@ int main() {
 			fprintf(stderr, "error sending window items\n");
 			exit(1);
 		}
+		if (held_item_change_clientbound(&c, 0) < 0) {
+			fprintf(stderr, "error sending held item change\n");
+			exit(1);
+		}
 
 		for (int y = 0; y < 7; ++y)
 			for (int x = 0; x < 7; ++x)

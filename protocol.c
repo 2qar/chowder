@@ -211,6 +211,14 @@ int window_items(struct conn *c) {
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
+int held_item_change_clientbound(struct conn *c, uint8_t slot) {
+	struct send_packet p = {0};
+	make_packet(&p, 0x40);
+
+	write_byte(&p, slot);
+	return conn_write_packet(c, finalize_packet(&p));
+}
+
 int spawn_position(struct conn *c, uint16_t x, uint16_t y, uint16_t z) {
 	struct send_packet p = {0};
 	make_packet(&p, 0x4E);

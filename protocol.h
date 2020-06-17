@@ -17,6 +17,7 @@ int pong(int sfd, uint8_t id[8]);
 
 int join_game(struct conn *);
 int window_items(struct conn *);
+int held_item_change_clientbound(struct conn *, uint8_t slot);
 int spawn_position(struct conn *, uint16_t, uint16_t, uint16_t);
 int chunk_data(struct conn *, int, int, bool);
 int player_position_look(struct conn *, int *teleport_id);
