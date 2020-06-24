@@ -152,8 +152,12 @@ int main() {
 		for (;;) {
 			int polled = poll(&pfd, 1, 100);
 			if (polled > 0 && (pfd.revents & POLLIN)) {
-				if (conn_parse_packet(&c, &p) < 0)
+				/* FIXME: parsed packet is occasionally junk
+				 *        (packet_id is some crazy random hex junk like 0x3b328c) */
+				if (conn_parse_packet(&c, &p) < 0) {
+					fprintf(stderr, "error parsing packet\n");
 					break;
+				}
 				switch (p.packet_id) {
 					case 0x00:
 						printf("teleport confirm: %d\n", teleport_confirm(&p, teleport_id));
