@@ -25,9 +25,7 @@ void conn_finish(struct conn *c) {
 }
 
 int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
-	/* TODO: maybe store this in the conn (pretty sure it wont change xd) */
-	int block_size = EVP_CIPHER_CTX_block_size(c->_decrypt_ctx);
-	int in_len = MAX_PACKET_LEN + block_size;
+	int in_len = MAX_PACKET_LEN;
 	uint8_t in[in_len];
 	int n = recv(c->_sfd, &in, in_len, MSG_PEEK);
 	if (n < 0) {
@@ -55,7 +53,7 @@ int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
 		return -1;
 
 	/* pop the parsed packet off the read buffer */
-	size_t read_len = p->_packet_len + n + block_size;
+	size_t read_len = p->_packet_len + n;
 	read(c->_sfd, &in, read_len);
 	return p->_packet_len;
 }
