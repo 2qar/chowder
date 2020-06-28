@@ -19,7 +19,7 @@
 #include "conn.h"
 
 #define PLAYERS 4
-#define PORT 25566
+#define PORT    25565
 
 #define DER_KEY_LEN 162
 
