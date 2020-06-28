@@ -15,8 +15,13 @@ ssize_t packet_read_byte(void *p) {
 
 ssize_t sfd_read_byte(void *sfd) {
 	ssize_t b;
-	if (read(*((int *) sfd), &b, (size_t) 1) < 0)
+	int n = read(*((int *) sfd), &b, (size_t) 1);
+	if (n == -1) {
+		perror("read");
 		return -1;
+	} else if (n == 0) {
+		return ERR_CONN_CLOSED;
+	}
 	return b;
 }
 
@@ -27,7 +32,7 @@ int read_varint_gen(ssize_t (*read_byte)(void *), void *src, int *v) {
 	ssize_t b;
 	do {
 		if ((b = (*read_byte)(src)) < 0)
-			return -1;
+			return b;
 		*v |= ((b & 0x7f) << (7 * n++));
 	} while ((b & 0x80) != 0);
 

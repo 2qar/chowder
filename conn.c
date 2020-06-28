@@ -28,7 +28,7 @@ ssize_t read_encrypted_byte(void *src) {
 	struct conn *c = (struct conn *)src;
 	ssize_t b = sfd_read_byte((void *) &(c->_sfd));
 	if (b < 0)
-		return -1;
+		return b;
 
 	int outl = 1;
 	uint8_t decrypted[1];
@@ -40,12 +40,11 @@ ssize_t read_encrypted_byte(void *src) {
 	return (ssize_t)(decrypted[0]);
 }
 
-/* FIXME: this fixes the junk packet issue, but now the client disconnecting causes a segfault */
 int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
 	int packet_len_bytes = read_varint_gen(read_encrypted_byte, (void *) c, &(p->_packet_len));
 	if (packet_len_bytes < 0) {
 		fprintf(stderr, "error reading packet length\n");
-		return -1;
+		return packet_len_bytes;
 	}
 
 	uint8_t in[p->_packet_len];

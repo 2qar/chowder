@@ -151,8 +151,12 @@ int main() {
 		for (;;) {
 			int polled = poll(&pfd, 1, 100);
 			if (polled > 0 && (pfd.revents & POLLIN)) {
-				if (conn_parse_packet(&c, &p) < 0) {
-					fprintf(stderr, "error parsing packet\n");
+				int result = conn_parse_packet(&c, &p);
+				if (result < 0) {
+					if (result == ERR_CONN_CLOSED)
+						puts("client closed connection");
+					else
+						fprintf(stderr, "error parsing packet\n");
 					break;
 				}
 				switch (p.packet_id) {

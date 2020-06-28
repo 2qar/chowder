@@ -6,6 +6,8 @@
 
 #include "nbt.h"
 
+#define ERR_CONN_CLOSED    -2
+
 ssize_t sfd_read_byte(void *sfd);
 int read_varint_gen(ssize_t (*read_byte)(void *src), void *src, int *v);
 
