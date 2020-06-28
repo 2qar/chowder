@@ -148,12 +148,9 @@ int main() {
 		uint64_t keep_alive_id;
 		time_t keep_alive_time = 0;
 		time_t last_client_response = time(NULL);
-		/* FIXME: after client connects, the F3 menu is stuck "waiting for chunk" */
 		for (;;) {
 			int polled = poll(&pfd, 1, 100);
 			if (polled > 0 && (pfd.revents & POLLIN)) {
-				/* FIXME: parsed packet is occasionally junk
-				 *        (packet_id is some crazy random hex junk like 0x3b328c) */
 				if (conn_parse_packet(&c, &p) < 0) {
 					fprintf(stderr, "error parsing packet\n");
 					break;

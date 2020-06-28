@@ -14,11 +14,10 @@ ssize_t packet_read_byte(void *p) {
 }
 
 ssize_t sfd_read_byte(void *sfd) {
-	uint8_t b;
+	ssize_t b;
 	if (read(*((int *) sfd), &b, (size_t) 1) < 0)
 		return -1;
-	else
-		return (ssize_t) b;
+	return b;
 }
 
 int read_varint_gen(ssize_t (*read_byte)(void *), void *src, int *v) {

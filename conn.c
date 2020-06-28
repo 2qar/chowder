@@ -24,37 +24,49 @@ void conn_finish(struct conn *c) {
 	EVP_CIPHER_CTX_free(c->_encrypt_ctx);
 }
 
-int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
-	int in_len = MAX_PACKET_LEN;
-	uint8_t in[in_len];
-	int n = recv(c->_sfd, &in, in_len, MSG_PEEK);
-	if (n < 0) {
-		perror("read");
+ssize_t read_encrypted_byte(void *src) {
+	struct conn *c = (struct conn *)src;
+	ssize_t b = sfd_read_byte((void *) &(c->_sfd));
+	if (b < 0)
 		return -1;
-	} else if (n == 0) {
-		fprintf(stderr, "client sent 0 bytes, connection probably closed\n");
+
+	int outl = 1;
+	uint8_t decrypted[1];
+	if (!EVP_CipherUpdate(c->_decrypt_ctx, decrypted, &outl, (uint8_t *) &b, 1)) {
+		fprintf(stderr, "error decrypting byte\n");
 		return -1;
 	}
 
+	return (ssize_t)(decrypted[0]);
+}
+
+/* FIXME: this fixes the junk packet issue, but now the client disconnecting causes a segfault */
+int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
+	int packet_len_bytes = read_varint_gen(read_encrypted_byte, (void *) c, &(p->_packet_len));
+	if (packet_len_bytes < 0) {
+		fprintf(stderr, "error reading packet length\n");
+		return -1;
+	}
+
+	uint8_t in[p->_packet_len];
+	if (read(c->_sfd, in, p->_packet_len) < 0) {
+		perror("read");
+		return -1;
+	}
 	int outl = MAX_PACKET_LEN;
-	int result = EVP_CipherUpdate(c->_decrypt_ctx, p->_data, &outl, in, n);
+	int result = EVP_CipherUpdate(c->_decrypt_ctx, p->_data, &outl, in, p->_packet_len);
 	if (result == 0) {
 		/* TODO: report openssl errors here and in write_encrypted_packet */
 		fprintf(stderr, "decrypt error\n");
 		return -1;
 	}
 
-	/* read packet length + id, maybe move to a function in packet.c */
 	p->_index = 0;
-	n = read_varint(p, &(p->_packet_len));
-	if (n < 0)
+	if (read_varint(p, &(p->packet_id)) < 0) {
+		fprintf(stderr, "error reading packet id\n");
 		return -1;
-	if (read_varint(p, &(p->packet_id)) < 0)
-		return -1;
+	}
 
-	/* pop the parsed packet off the read buffer */
-	size_t read_len = p->_packet_len + n;
-	read(c->_sfd, &in, read_len);
 	return p->_packet_len;
 }
 
