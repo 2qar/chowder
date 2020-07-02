@@ -300,10 +300,10 @@ int chunk_data(struct conn *c, int x, int y, bool full) {
 		write_varint(&block_data, palette[i]);
 
 	/* data array length */
-	write_varint(&block_data, 256);
+	write_varint(&block_data, 512);
 	/* write the blocks */
 	uint64_t layer;
-	for (int i = 0; i < 256; ++i) {
+	for (int i = 0; i < 512; ++i) {
 		layer = 0;
 		for (int b = 0; b < 64 / bits_per_block; ++b)
 			/* FIXME: always an empty block to the client */
