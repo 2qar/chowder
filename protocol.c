@@ -274,11 +274,12 @@ int chunk_data(struct conn *c, int x, int y, bool full) {
 	write_varint(&p, 1);
 
 	struct nbt n = {0};
-	nbt_init(&n, "");
+	nbt_write_init(&n, "");
 	int64_t heightmaps[36] = {0};
 	nbt_write_long_array(&n, "MOTION_BLOCKING", 36, heightmaps);
 	nbt_finish(&n);
 	write_nbt(&p, &n);
+	free(n.data);
 
 	if (full)
 		for (int i = 0; i < 1024; ++i)

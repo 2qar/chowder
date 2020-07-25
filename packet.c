@@ -202,5 +202,5 @@ void write_long(struct send_packet *p, uint64_t l) {
 
 void write_nbt(struct send_packet *p, struct nbt *n) {
 	for (int i = 0; i < n->_index; ++i)
-		write_byte(p, n->_data[i]);
+		write_byte(p, n->data[i]);
 }

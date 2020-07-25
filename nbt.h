@@ -3,8 +3,8 @@
  */
 #include <stdint.h>
 
-#ifndef MAX_NBT_LEN
-#define MAX_NBT_LEN 1024
+#ifndef DEFAULT_NBT_LEN
+#define DEFAULT_NBT_LEN 1024
 
 enum tag {
 	TAG_End,
@@ -23,11 +23,13 @@ enum tag {
 };
 
 struct nbt {
-	uint8_t _data[MAX_NBT_LEN];
+	uint16_t data_len;
+	uint8_t *data;
 	uint16_t _index;
 };
 
-void nbt_init(struct nbt *, const char *name);
+void nbt_init(struct nbt *);
+void nbt_write_init(struct nbt *, const char *name);
 void nbt_finish(struct nbt *);
 void nbt_write_long_array(struct nbt *, const char *name, int32_t len, int64_t[]);
 

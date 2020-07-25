@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 
@@ -5,7 +6,7 @@
 
 void nbt_write_byte(struct nbt *n, uint8_t byte) {
 	/* FIXME: verify n->_index < MAX_NBT_LEN */
-	n->_data[n->_index++] = byte;
+	n->data[n->_index++] = byte;
 }
 
 void nbt_write_short_tagless(struct nbt *n, int16_t s) {
@@ -14,7 +15,7 @@ void nbt_write_short_tagless(struct nbt *n, int16_t s) {
 	nbt_write_byte(n, ns >> 8);
 	nbt_write_byte(n, ns & 0xff);
 	*/
-	memcpy(n->_data + n->_index, &ns, 2);
+	memcpy(n->data + n->_index, &ns, 2);
 	n->_index += 2;
 }
 
@@ -23,7 +24,7 @@ void nbt_write_cstring(struct nbt *n, const char *s) {
 	/* FIXME: this probably breaks if s is too long */
 	nbt_write_short_tagless(n, (int16_t) s_len);
 	if (s_len > 0) {
-		memcpy(n->_data + n->_index, s, s_len);
+		memcpy(n->data + n->_index, s, s_len);
 		n->_index += s_len;
 	}
 }
@@ -33,8 +34,14 @@ void nbt_write_tag(struct nbt *n, enum tag t, const char *name) {
 	nbt_write_cstring(n, name);
 }
 
-void nbt_init(struct nbt *n, const char *name) {
+void nbt_init(struct nbt *n) {
 	n->_index = 0;
+	if (n->data == NULL)
+		n->data = malloc(DEFAULT_NBT_LEN);
+}
+
+void nbt_write_init(struct nbt *n, const char *name) {
+	nbt_init(n);
 	nbt_write_tag(n, TAG_Compound, name);
 }
 
@@ -44,7 +51,7 @@ void nbt_finish(struct nbt *n) {
 
 void nbt_write_int_tagless(struct nbt *n, int32_t i) {
 	uint32_t ni = htonl(i);
-	memcpy(n->_data + n->_index, &ni, 4);
+	memcpy(n->data + n->_index, &ni, 4);
 	n->_index += 4;
 }
 
