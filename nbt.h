@@ -32,5 +32,6 @@ void nbt_init(struct nbt *);
 void nbt_write_init(struct nbt *, const char *name);
 void nbt_finish(struct nbt *);
 void nbt_write_long_array(struct nbt *, const char *name, int32_t len, int64_t[]);
+int nbt_tag_seek(struct nbt *, enum tag, const char *name);
 
 #endif
