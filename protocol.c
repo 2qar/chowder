@@ -41,7 +41,7 @@ int server_list_ping(int sfd) {
 	make_packet(&p, 0x00);
 
 	const int json_len = 1000;
-	char json[json_len];
+	char *json = malloc(sizeof(char) * json_len);
 	/* TODO: don't hardcode, insert state instead (once state exists */
 	int n = snprintf(json, json_len-1, "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
 		"\"players\": { \"max\": 4, \"online\": 0, \"sample\": [] },"
@@ -51,6 +51,7 @@ int server_list_ping(int sfd) {
 		return -1;
 	}
 	write_string(&p, n, json);
+	free(json);
 
 	return write_packet(sfd, finalize_packet(&p));
 }
@@ -113,7 +114,7 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uin
 		return -1;
 
 	const size_t buf_len = 1000;
-	uint8_t buf[buf_len];
+	uint8_t *buf = malloc(sizeof(uint8_t) * buf_len);
 	if (decrypt_byte_array(p, ctx, buf_len, buf) < 0) {
 		return -1;
 	}
@@ -135,6 +136,7 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uin
 		}
 	}
 
+	free(buf);
 	free(p);
 	return 0;
 }
