@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
@@ -100,7 +101,7 @@ int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s) {
 			nbt_read_byte(n);
 		}
 	}
-	s[len] = 0;
+	s[read] = 0;
 	return read;
 }
 
@@ -138,8 +139,6 @@ int nbt_tag_len(struct nbt *n, enum tag t) {
 	}
 }
 
-/* TODO: add helper functions for parsing compounds, seeking compound end, parsing list of compounds */
-
 int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compound_level) {
 	char buf[32] = {0};
 	do {
@@ -151,6 +150,8 @@ int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compo
 				n->_index = tag_start;
 				return tag_start;
 			}
+		} else if (t == TAG_End) {
+			return n->_index;
 		}
 
 		/* no match, skip this tag */
@@ -186,4 +187,25 @@ int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compo
 
 int nbt_tag_seek(struct nbt *n, enum tag t, const char *name) {
 	return nbt_tag_seek_iter(n, t, name, 0);
+}
+
+/* seek tags inside a list of compound tags */
+int nbt_compound_seek_tag(struct nbt *n, enum tag t, const char *name) {
+	return nbt_tag_seek_iter(n, t, name, 1);
+}
+
+/* maybe "seek_end" is a bad name for it because it skips to the start of the next compound
+ * in the list */
+int nbt_compound_seek_end(struct nbt *n) {
+	return nbt_tag_seek_iter(n, TAG_End, "", 1);
+}
+
+/* read a TAG_List's length, setting n's index to the first element in the process */
+int nbt_list_len(struct nbt *n) {
+	assert(nbt_read_byte(n) == TAG_List);
+	n->_index += nbt_read_short(n);
+	/* ignore the tag type, right now these parsing functions are only for
+	 * parsing chunks, so all of the types are known beforehand */
+	nbt_read_byte(n);
+	return nbt_read_int(n);
 }
