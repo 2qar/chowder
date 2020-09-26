@@ -17,4 +17,4 @@ conn.o: packet.o
 packet.o: nbt.o
 
 clean:
-	rm *.o $(TARGET)
+	rm -f *.o $(TARGET)
