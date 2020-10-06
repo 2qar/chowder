@@ -81,10 +81,25 @@ int16_t nbt_read_short(struct nbt *n) {
 	return i;
 }
 
-void nbt_read_string(struct nbt *n, uint16_t len, char *s) {
-	for (uint16_t i = 0; i < len; ++i)
-		s[i] = nbt_read_byte(n);
-	s[len] = 0;
+void nbt_skip_tag_name(struct nbt *n) {
+	nbt_read_byte(n);
+	int16_t name_len = nbt_read_short(n);
+	n->_index += name_len;
+}
+
+uint16_t nbt_read_string(struct nbt *n, uint16_t buf_len, char *buf) {
+	nbt_skip_tag_name(n);
+	uint16_t len = nbt_read_short(n);
+	uint16_t i;
+	for (i = 0; i < len; ++i)
+		if (i < buf_len)
+			buf[i] = nbt_read_byte(n);
+		else
+			nbt_read_byte(n);
+	if (i > buf_len - 1)
+		i = buf_len - 1;
+	buf[i] = 0;
+	return i + 1;
 }
 
 int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s) {
@@ -105,6 +120,7 @@ int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s) {
 	return read;
 }
 
+/* TODO: add "_tagless" to tagless read functions like this one */
 int32_t nbt_read_int(struct nbt *n) {
 	int32_t v = 0;
 	for (int i = 3; i >= 0; --i)
