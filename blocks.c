@@ -13,6 +13,12 @@
 
 char *read_blocks_json(char *blocks_json_path) {
 	FILE *f = fopen(blocks_json_path, "r");
+	if (f == NULL) {
+		char err[256];
+		snprintf(err, 256, "error opening '%s'", blocks_json_path);
+		perror(err);
+		return NULL;
+	}
 	fseek(f, 0L, SEEK_END);
 	size_t blocks_json_len = ftell(f);
 	rewind(f);
