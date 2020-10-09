@@ -7,6 +7,10 @@
 struct section {
 	int8_t y;
 	int palette_len;
+	/* TODO: make this an array of palette_entry structs,
+	 *       holding the ID + a reference count
+	 *       so entries can be removed when their ref count hits 0.
+	 *       maybe just set the ID to -1 when their ref count hits 0 idk */
 	int *palette;
 	int bits_per_block;
 	int *blockstates;

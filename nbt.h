@@ -34,6 +34,7 @@ void nbt_finish(struct nbt *);
 void nbt_write_long_array(struct nbt *, const char *name, int32_t len, int64_t[]);
 uint8_t nbt_read_byte(struct nbt *n);
 void nbt_skip_tag_name(struct nbt *n);
+int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s);
 int32_t nbt_read_int(struct nbt *n);
 uint16_t nbt_read_string(struct nbt *n, uint16_t buf_len, char *buf);
 int nbt_tag_seek(struct nbt *, enum tag, const char *name);

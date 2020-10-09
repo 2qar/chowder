@@ -5,10 +5,14 @@
 #include <string.h>
 #include <math.h>
 #include <arpa/inet.h>
+#include <search.h>
 
 #include "region.h"
 #include "blockstates.h"
 #include "nbt.h"
+
+#define JSMN_HEADER
+#include "include/jsmn/jsmn.h"
 
 #define COMPRESSION_TYPE_ZLIB 2
 
@@ -76,6 +80,61 @@ void parse_palette(struct section *s, struct nbt *n, int palette_index) {
 	n->_index = palette_index;
 	s->palette_len = nbt_list_len(n);
 	s->bits_per_block = (int) ceil(log2(s->palette_len));
+
+	s->palette = malloc(sizeof(int) * s->palette_len);
+	const int name_len = 128;
+	char *name = malloc(sizeof(char) * name_len);
+	for (int i = 0; i < s->palette_len; ++i) {
+		int block_start = n->_index;
+		nbt_compound_seek_end(n);
+		int block_end = n->_index;
+		printf("block starts at %d, length=%d\n", block_start, block_end-block_start);
+		n->_index = block_start;
+		int name_index = nbt_compound_seek_tag(n, TAG_String, "Name");
+		n->_index = name_index;
+		nbt_read_string(n, name_len, name);
+
+		n->_index = block_start;
+		int properties_index = nbt_compound_seek_tag(n, TAG_Compound, "Properties");
+		if (properties_index != -1) {
+			n->_index = properties_index;
+			nbt_skip_tag_name(n);
+
+			/* read + append each property to the block's name */
+			while (n->data[n->_index] != TAG_End) {
+				char prop_name[64] = {0};
+				int prop_start = n->_index;
+				nbt_read_tag_name(n, 64, prop_name);
+				strcat(name, ";");
+				strncat(name, prop_name, 64);
+				strcat(name, "=");
+				n->_index = prop_start;
+				char prop_value[64] = {0};
+				nbt_read_string(n, 64, prop_value);
+				strncat(name, prop_value, 64);
+			}
+
+			n->_index = block_start;
+		}
+
+		ENTRY e;
+		e.key = name;
+		printf("searching for '%s'\n", e.key);
+		ENTRY *found = hsearch(e, FIND);
+		if (found == NULL) {
+			/* FIXME: some blocks that are in the table (like almost every water level)
+			 *        aren't being found here */
+			fprintf(stderr, "couldn't find a blockstate for '%s'\n", name);
+			s->palette[i] = 0;
+		} else {
+			printf("parsed '%s'=%d\n", name, *((int *) found->data));
+			s->palette[i] = *((int *) found->data);
+		}
+
+		//nbt_compound_seek_end(n);
+		n->_index = block_end;
+	}
+	free(name);
 }
 
 struct chunk *parse_chunk(Bytef *chunk_data) {
@@ -89,6 +148,7 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 		return NULL;
 	}
 	c->sections_len = nbt_list_len(&nbt_data);
+	printf("parsing %d sections\n", c->sections_len);
 
 	for (int i = 0; i < c->sections_len; ++i) {
 		struct section *s = calloc(1, sizeof(struct section));

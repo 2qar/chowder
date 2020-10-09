@@ -27,17 +27,18 @@ int test_read_region() {
 			if (n < 0) {
 				fprintf(stderr, "error reading chunk @ (%d, %d)\n", x, y);
 				return 1;
-			}
-			printf("parsing chunk (%d,%d)\n", x, y);
-			struct chunk *c = parse_chunk(chunk_data);
+			} else if (n > 0) {
+				printf("parsing chunk (%d,%d)\n", x, y);
+				struct chunk *c = parse_chunk(chunk_data);
 
-			for (int i = 0; i < c->sections_len; ++i) {
-				if (c->sections[i]->palette_len > 0 && c->sections[i]->blockstates != NULL)
-					if (verify_blockstates(c->sections[i]->blockstates, c->sections[i]->palette_len) > 0)
-						return 1;
-			}
+				for (int i = 0; i < c->sections_len; ++i) {
+					if (c->sections[i]->palette_len > 0 && c->sections[i]->blockstates != NULL)
+						if (verify_blockstates(c->sections[i]->blockstates, c->sections[i]->palette_len) > 0)
+							return 1;
+				}
 
-			r.chunks[y][x] = c;
+				r.chunks[y][x] = c;
+			}
 		}
 	}
 

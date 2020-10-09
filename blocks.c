@@ -83,6 +83,11 @@ int parse_blocks_json(char *blocks_json, int tokens_len, jsmntok_t *tokens) {
 				++i;
 				while (i < tokens_len && tokens[i].start < states_end) {
 					if (tokens[i].type == JSMN_STRING) {
+						/* FIXME: if this state is the default state (the first one),
+						 *        ignore the properties and their values and just
+						 *        use the block's name as the key.
+						 *        or, insert an extra key for the default state that's
+						 *        just the block's name */
 						if (jstrncmp("properties", blocks_json, tokens, i) == 0) {
 							snprintf(prop_name, 256, "%s", name);
 							++i;
