@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
+#include <errno.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -14,62 +16,51 @@
 
 #include <assert.h>
 
+#include "blocks.h"
 #include "protocol.h"
 #include "server.h"
 #include "conn.h"
 
-#define PLAYERS 4
-#define PORT    25565
+#define PLAYERS    4
+#define PORT       25565
+#define LEVEL_PATH "levels/default"
 
+#define BLOCKS_PATH "gamedata/blocks.json"
 #define DER_KEY_LEN 162
 
+int check_level_path(char *);
+int bind_socket();
 int generate_key(EVP_PKEY **pkey);
 int rsa_der(EVP_PKEY *pkey, uint8_t **der);
+EVP_PKEY_CTX *pkey_ctx_init(EVP_PKEY *);
 int handle_connection(int conn_fd, EVP_PKEY_CTX *ctx, const uint8_t *der);
 
 int main() {
+	/* make sure level exists + load the block table */
+	int failed = check_level_path(LEVEL_PATH);
+	if (failed)
+		exit(EXIT_FAILURE);
+	failed = create_block_table(BLOCKS_PATH);
+	if (failed)
+		exit(EXIT_FAILURE);
+
 	/* socket init */
-	int sfd = socket(AF_INET, SOCK_STREAM, 0);
-
-	struct sockaddr_in saddr = {0};
-	saddr.sin_family = AF_INET;
-	saddr.sin_port = htons(PORT);
-	saddr.sin_addr.s_addr = 0; // localhost idiot
-
-	if (bind(sfd, (struct sockaddr *) &saddr, sizeof(saddr)) != 0) {
-		perror("bind");
-		exit(1);
-	}
-
-	if (listen(sfd, PLAYERS) != 0) {
-		perror("listen");
-		exit(1);
-	}
+	int sfd = bind_socket();
+	if (sfd < 0)
+		exit(EXIT_FAILURE);
 
 	/* RSA keygen */
 	EVP_PKEY *pkey = NULL;
 	if (generate_key(&pkey) > 0)
-		exit(1);
+		exit(EXIT_FAILURE);
 
 	uint8_t *der = NULL;
 	if (rsa_der(pkey, &der) > 0)
-		exit(1);
+		exit(EXIT_FAILURE);
 
-	EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pkey, ENGINE_get_default_RSA());
-	// TODO: EVP_PKEY_CTX isn't thread-safe, so if i ever get there,
-	//       do this decryption context stuff when decrypting packets
-	if (ctx == NULL) {
-		fprintf(stderr, "EVP_PKEY_CTX_new(): %lu\n", ERR_get_error());
-		exit(1);
-	}
-	if (EVP_PKEY_decrypt_init(ctx) <= 0) {
-		fprintf(stderr, "EVP_PKEY_decrypt_init(): %lu\n", ERR_get_error());
-		exit(1);
-	}
-	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0) {
-		fprintf(stderr, "EVP_PKEY_CTX_set_rsa_padding(): %lu\n", ERR_get_error());
-		exit(1);
-	}
+	EVP_PKEY_CTX *ctx = pkey_ctx_init(pkey);
+	if (ctx == NULL)
+		exit(EXIT_FAILURE);
 
 	/* connection handling */
 	int conn;
@@ -83,7 +74,42 @@ int main() {
 	EVP_PKEY_CTX_free(ctx);
 	EVP_PKEY_free(pkey);
 	close(sfd);
+
+	exit(EXIT_SUCCESS);
+}
+
+int check_level_path(char *level_path) {
+	/* check if LEVEL_PATH actually exists */
+	FILE *level_dir = fopen(level_path, "r");
+	if (level_dir == NULL) {
+		char err[256];
+		snprintf(err, 256, "error opening '%s'", level_path);
+		perror(err);
+		return 1;
+	}
+	fclose(level_dir);
 	return 0;
+}
+
+int bind_socket() {
+	int sfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	struct sockaddr_in saddr = {0};
+	saddr.sin_family = AF_INET;
+	saddr.sin_port = htons(PORT);
+	saddr.sin_addr.s_addr = 0; // localhost idiot
+
+	if (bind(sfd, (struct sockaddr *) &saddr, sizeof(saddr)) != 0) {
+		perror("bind");
+		return -1;
+	}
+
+	if (listen(sfd, PLAYERS) != 0) {
+		perror("listen");
+		return -1;
+	}
+
+	return sfd;
 }
 
 int generate_key(EVP_PKEY **pkey) {
@@ -122,6 +148,25 @@ int rsa_der(EVP_PKEY *pkey, uint8_t **der) {
 	*der -= n;
 	(*der)[DER_KEY_LEN] = 0;
 	return 0;
+}
+
+EVP_PKEY_CTX *pkey_ctx_init(EVP_PKEY *pkey) {
+	EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pkey, ENGINE_get_default_RSA());
+	// TODO: EVP_PKEY_CTX isn't thread-safe, so if i ever get there,
+	//       do this decryption context stuff when decrypting packets
+	if (ctx == NULL) {
+		fprintf(stderr, "EVP_PKEY_CTX_new(): %lu\n", ERR_get_error());
+		return NULL;
+	}
+	if (EVP_PKEY_decrypt_init(ctx) <= 0) {
+		fprintf(stderr, "EVP_PKEY_decrypt_init(): %lu\n", ERR_get_error());
+		return NULL;
+	}
+	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0) {
+		fprintf(stderr, "EVP_PKEY_CTX_set_rsa_padding(): %lu\n", ERR_get_error());
+		return NULL;
+	}
+	return ctx;
 }
 
 int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {

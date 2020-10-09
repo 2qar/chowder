@@ -135,7 +135,7 @@ int parse_blocks_json(char *blocks_json, int tokens_len, jsmntok_t *tokens) {
 	return count;
 }
 
-int create_block_table(char *blocks_json) {
+int create_block_table_from_json(char *blocks_json) {
 	jsmn_parser p;
 	jsmn_init(&p);
 	jsmntok_t *t = malloc(sizeof(jsmntok_t) * TOKENS);
@@ -156,5 +156,18 @@ int create_block_table(char *blocks_json) {
 	}
 
 	free(t);
+	return 0;
+}
+
+int create_block_table(char *block_json_path) {
+	char *blocks_json = read_blocks_json(block_json_path);
+	if (blocks_json == NULL)
+		return 1;
+
+	int failed = create_block_table_from_json(blocks_json);
+	if (failed)
+		return 1;
+
+	free(blocks_json);
 	return 0;
 }
