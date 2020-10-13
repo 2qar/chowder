@@ -3,6 +3,7 @@
 
 #include "read_region.h"
 #include "../region.h"
+#include "../blockstates.h"
 
 int verify_blockstates(int blockstates[BLOCKSTATES_LEN], int palette_len) {
 	for (int i = 0; i < BLOCKSTATES_LEN; ++i) {

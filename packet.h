@@ -11,7 +11,9 @@
 ssize_t sfd_read_byte(void *sfd);
 int read_varint_gen(ssize_t (*read_byte)(void *src), void *src, int *v);
 
-#define MAX_PACKET_LEN 10000
+/* FIXME: dynamically allocate packet data as needed
+ *        instead of making huge buffers for every packet */
+#define MAX_PACKET_LEN 10000*5
 
 struct recv_packet {
 	int packet_id;

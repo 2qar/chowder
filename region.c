@@ -187,6 +187,10 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 	return c;
 }
 
+size_t network_blockstates(const struct section *s, uint64_t **out) {
+	return write_blockstates(s->blockstates, s->bits_per_block, out);
+}
+
 void free_section(struct section *s) {
 	free(s->palette);
 	free(s->blockstates);

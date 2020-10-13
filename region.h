@@ -1,8 +1,7 @@
 #include <stdio.h>
+#include <stdint.h>
 
 #include <zlib.h>
-
-#define BLOCKSTATES_LEN 4096
 
 struct section {
 	int8_t y;
@@ -29,5 +28,6 @@ struct region {
 
 ssize_t read_chunk(FILE *f, int x, int y, size_t *chunk_buf_len, Bytef **chunk);
 struct chunk *parse_chunk(Bytef *chunk_data);
+size_t network_blockstates(const struct section *, uint64_t **);
 void free_chunk(struct chunk *);
 void free_region(struct region *);

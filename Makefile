@@ -9,7 +9,7 @@ $(TARGET): main.o protocol.o server.o conn.o packet.o nbt.o region.o blockstates
 
 main.o: protocol.o server.o conn.o
 
-protocol.o: nbt.o packet.o conn.o
+protocol.o: nbt.o packet.o conn.o region.o blockstates.o
 
 server.o: protocol.o conn.o
 

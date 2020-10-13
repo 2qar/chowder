@@ -5,8 +5,11 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 #include <openssl/err.h>
+#include <zlib.h>
 
+#include "blockstates.h"
 #include "protocol.h"
+#include "region.h"
 #include "nbt.h"
 
 int handshake(int sfd) {
@@ -264,6 +267,38 @@ int spawn_position(struct conn *c, uint16_t x, uint16_t y, uint16_t z) {
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
+size_t write_section_to_packet(const struct section *s, struct send_packet *p) {
+	if (s->bits_per_block == -1)
+		return 0;
+
+	/* count non-air blocks */
+	uint16_t block_count = 0;
+	for (int b = 0; b < BLOCKSTATES_LEN; ++b)
+		if (s->blockstates[b] != 0)
+			++block_count;
+	write_short(p, block_count);
+
+	/* palette */
+	const uint8_t bits_per_block = s->bits_per_block;
+	write_byte(p, bits_per_block);
+	uint8_t palette_len = s->palette_len;
+	write_varint(p, palette_len);
+	for (int i = 0; i < palette_len; ++i)
+		write_varint(p, s->palette[i]);
+
+	/* write the blocks */
+	/* FIXME: the client is receiving chunks properly,
+	 *        but every block is air */
+	uint64_t *blockstates = NULL;
+	size_t blockstates_len = network_blockstates(s, &blockstates);
+	write_varint(p, blockstates_len);
+	for (size_t b = 0; b < blockstates_len; ++b)
+		write_long(p, blockstates[b]);
+	free(blockstates);
+
+	return p->_packet_len;
+}
+
 int chunk_data(struct conn *c, int x, int y, bool full) {
 	struct send_packet p = {0};
 	make_packet(&p, 0x22);
@@ -272,11 +307,41 @@ int chunk_data(struct conn *c, int x, int y, bool full) {
 	write_int(&p, y);
 	write_byte(&p, full);
 
+	/* FIXME: take a pre-loaded chunk instead of
+	 *        loading the chunk here */
+	/* hardcoded path bad */
+	FILE *f = fopen("levels/default/region/r.0.0.mca", "r");
+	if (f == NULL) {
+		puts("error opening region file");
+		return -1;
+	}
+	size_t chunk_data_len = 0;
+	Bytef *chunk_data = NULL;
+	int uncompressed_len = read_chunk(f, x, y, &chunk_data_len, &chunk_data);
+	if (uncompressed_len == 0) {
+		return 0;
+	} else if (uncompressed_len < 0) {
+		fprintf(stderr, "fuckin panic\n");
+		return 0;
+	}
+	fclose(f);
+	struct chunk *chunk = parse_chunk(chunk_data);
+	if (chunk == NULL) {
+		fprintf(stderr, "also panic\n");
+		return -1;
+	}
+
 	/* primary bit mask */
-	write_varint(&p, 1);
+	int section_bit_mask = 0;
+	for (int i = 0; i < chunk->sections_len; ++i) {
+		int has_blocks = chunk->sections[i]->bits_per_block > 0;
+		section_bit_mask |= (has_blocks << i);
+	}
+	write_varint(&p, section_bit_mask);
 
 	struct nbt n = {0};
 	nbt_write_init(&n, "");
+	/* TODO: actually calculate heightmaps */
 	int64_t heightmaps[36] = {0};
 	nbt_write_long_array(&n, "MOTION_BLOCKING", 36, heightmaps);
 	nbt_finish(&n);
@@ -288,37 +353,23 @@ int chunk_data(struct conn *c, int x, int y, bool full) {
 			/* TODO: don't just write desert for every biome xd */
 			write_int(&p, 2);
 
-	struct send_packet block_data = {0};
+	/* Write each chunk in this[0] format to temporary buffers
+	 * and record the total length of each buffer for writing
+	 * to the main packet.
+	 *    [0]: https://wiki.vg/Chunk_Format#Chunk_Section_structure
+	 */
+	size_t data_len = 0;
+	struct send_packet *block_data = calloc(chunk->sections_len, sizeof(struct send_packet));
+	for (int i = 0; i < chunk->sections_len; ++i)
+		data_len += write_section_to_packet(chunk->sections[i], &(block_data[i]));
 
-	uint16_t block_count = 256;
-	write_short(&block_data, block_count);
-	const uint8_t bits_per_block = 8;
-	write_byte(&block_data, bits_per_block);
-
-	/* palette */
-	uint8_t palette_len = 2;
-	write_varint(&block_data, palette_len);
-	uint8_t palette[] = { 0, 14 };
-	for (int i = 0; i < palette_len; ++i)
-		write_varint(&block_data, palette[i]);
-
-	/* data array length */
-	write_varint(&block_data, 512);
-	/* write the blocks */
-	uint64_t layer;
-	for (int i = 0; i < 512; ++i) {
-		layer = 0;
-		for (int b = 0; b < 64 / bits_per_block; ++b)
-			/* FIXME: always an empty block to the client */
-			layer |= ((uint64_t) (i < 32) << (b * bits_per_block));
-		write_long(&block_data, layer);
-	}
-
-	/* chunk sections length */
-	write_varint(&p, block_data._packet_len);
-	/* chunk junk */
-	for (unsigned int i = 0; i < block_data._packet_len; ++i)
-		write_byte(&p, block_data._data[i]);
+	/* write sections from before */
+	write_varint(&p, data_len);
+	for (int s = 0; s < chunk->sections_len; ++s)
+		for (unsigned int i = 0; i < block_data[s]._packet_len; ++i)
+			write_byte(&p, block_data[s]._data[i]);
+	free(block_data);
+	free(chunk);
 
 	/* # of block entities */
 	/* TODO: implement block entities */
