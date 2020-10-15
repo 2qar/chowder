@@ -77,27 +77,27 @@ void parse_blockstates(struct section *s, struct nbt *nbt_data, int blockstates_
 }
 
 char *parse_block_properties(struct nbt *n, int properties_index) {
-	char *properties = malloc(sizeof(char) * 128);
+	size_t properties_len = 128;
+	char *properties = malloc(sizeof(char) * properties_len);
 	properties[0] = '\0';
 
 	n->_index = properties_index;
 	nbt_skip_tag_name(n);
 
 	/* read + append each property to the block's name */
-	while (n->data[n->_index] != TAG_End) {
+	size_t written = 0;
+	while (n->data[n->_index] != TAG_End && written < properties_len) {
 		int prop_start = n->_index;
 
-		char prop_name[64] = {0};
-		nbt_read_tag_name(n, 64, prop_name);
-		strcat(properties, ";");
-
-		strncat(properties, prop_name, 64);
-		strcat(properties, "=");
+		char prop_name[32] = {0};
+		nbt_read_tag_name(n, 32, prop_name);
+		char prop_value[32] = {0};
 		n->_index = prop_start;
+		nbt_read_string(n, 32, prop_value);
 
-		char prop_value[64] = {0};
-		nbt_read_string(n, 64, prop_value);
-		strncat(properties, prop_value, 64);
+		size_t remaining = properties_len - written;
+		char *start = properties + written;
+		written += snprintf(start, remaining, ";%s=%s", prop_name, prop_value);
 	}
 
 	return properties;
