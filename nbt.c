@@ -102,7 +102,9 @@ uint16_t nbt_read_string(struct nbt *n, uint16_t buf_len, char *buf) {
 	return i + 1;
 }
 
-int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s) {
+/* read a tag's name, assuming n->index has skipped the tag's type
+ * and is already at the tag name's length */
+int nbt_read_tag_name_tagless(struct nbt *n, uint16_t buf_len, char *s) {
 	int16_t len = nbt_read_short(n);
 	if (!len)
 		return -1;
@@ -118,6 +120,12 @@ int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s) {
 	}
 	s[read] = 0;
 	return read;
+}
+
+int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s) {
+	/* skip the tag's name */
+	nbt_read_byte(n);
+	return nbt_read_tag_name_tagless(n, buf_len, s);
 }
 
 /* TODO: add "_tagless" to tagless read functions like this one */
@@ -161,7 +169,7 @@ int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compo
 		uint16_t tag_start = n->_index;
 		enum tag current_tag = nbt_read_byte(n);
 		if (current_tag != TAG_End) {
-			int len = nbt_read_tag_name(n, 32, buf);
+			int len = nbt_read_tag_name_tagless(n, 32, buf);
 			if (t == current_tag && !strncmp(buf, name, len)) {
 				n->_index = tag_start;
 				return tag_start;
