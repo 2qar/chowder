@@ -5,9 +5,9 @@
 #include <string.h>
 #include <math.h>
 #include <arpa/inet.h>
-#include <search.h>
 
 #include "region.h"
+#include "blocks.h"
 #include "blockstates.h"
 #include "nbt.h"
 
@@ -76,65 +76,68 @@ void parse_blockstates(struct section *s, struct nbt *nbt_data, int blockstates_
 	free(nbt_blockstates);
 }
 
+char *parse_block_properties(struct nbt *n, int properties_index) {
+	char *properties = malloc(sizeof(char) * 128);
+	properties[0] = '\0';
+
+	n->_index = properties_index;
+	nbt_skip_tag_name(n);
+
+	/* read + append each property to the block's name */
+	while (n->data[n->_index] != TAG_End) {
+		int prop_start = n->_index;
+
+		char prop_name[64] = {0};
+		nbt_read_tag_name(n, 64, prop_name);
+		strcat(properties, ";");
+
+		strncat(properties, prop_name, 64);
+		strcat(properties, "=");
+		n->_index = prop_start;
+
+		char prop_value[64] = {0};
+		nbt_read_string(n, 64, prop_value);
+		strncat(properties, prop_value, 64);
+	}
+
+	return properties;
+}
+
+int parse_palette_entry(struct nbt *n) {
+	size_t name_len = 128;
+	char *name = malloc(sizeof(char) * name_len);
+
+	int block_start = n->_index;
+	nbt_compound_seek_end(n);
+	int block_end = n->_index;
+	n->_index = block_start;
+
+	int name_index = nbt_compound_seek_tag(n, TAG_String, "Name");
+	n->_index = name_index;
+	nbt_read_string(n, name_len, name);
+
+	n->_index = block_start;
+	int properties_index = nbt_compound_seek_tag(n, TAG_Compound, "Properties");
+	if (properties_index != -1) {
+		char *properties = parse_block_properties(n, properties_index);
+		strncat(name, properties, name_len - strlen(name) - 1);
+		free(properties);
+	}
+	n->_index = block_end;
+
+	int id = block_id(name);
+	free(name);
+	return id;
+}
+
 void parse_palette(struct section *s, struct nbt *n, int palette_index) {
 	n->_index = palette_index;
 	s->palette_len = nbt_list_len(n);
 	s->bits_per_block = (int) ceil(log2(s->palette_len));
 
 	s->palette = malloc(sizeof(int) * s->palette_len);
-	const int name_len = 128;
-	char *name = malloc(sizeof(char) * name_len);
-	for (int i = 0; i < s->palette_len; ++i) {
-		int block_start = n->_index;
-		nbt_compound_seek_end(n);
-		int block_end = n->_index;
-		printf("block starts at %d, length=%d\n", block_start, block_end-block_start);
-		n->_index = block_start;
-		int name_index = nbt_compound_seek_tag(n, TAG_String, "Name");
-		n->_index = name_index;
-		nbt_read_string(n, name_len, name);
-
-		n->_index = block_start;
-		int properties_index = nbt_compound_seek_tag(n, TAG_Compound, "Properties");
-		if (properties_index != -1) {
-			n->_index = properties_index;
-			nbt_skip_tag_name(n);
-
-			/* read + append each property to the block's name */
-			while (n->data[n->_index] != TAG_End) {
-				char prop_name[64] = {0};
-				int prop_start = n->_index;
-				nbt_read_tag_name(n, 64, prop_name);
-				strcat(name, ";");
-				strncat(name, prop_name, 64);
-				strcat(name, "=");
-				n->_index = prop_start;
-				char prop_value[64] = {0};
-				nbt_read_string(n, 64, prop_value);
-				strncat(name, prop_value, 64);
-			}
-
-			n->_index = block_start;
-		}
-
-		ENTRY e;
-		e.key = name;
-		printf("searching for '%s'\n", e.key);
-		ENTRY *found = hsearch(e, FIND);
-		if (found == NULL) {
-			/* FIXME: some blocks that are in the table (like almost every water level)
-			 *        aren't being found here */
-			fprintf(stderr, "couldn't find a blockstate for '%s'\n", name);
-			s->palette[i] = 0;
-		} else {
-			printf("parsed '%s'=%d\n", name, *((int *) found->data));
-			s->palette[i] = *((int *) found->data);
-		}
-
-		//nbt_compound_seek_end(n);
-		n->_index = block_end;
-	}
-	free(name);
+	for (int i = 0; i < s->palette_len; ++i)
+		s->palette[i] = parse_palette_entry(n);
 }
 
 struct chunk *parse_chunk(Bytef *chunk_data) {

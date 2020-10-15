@@ -177,3 +177,15 @@ int create_block_table(char *block_json_path) {
 	free(blocks_json);
 	return 0;
 }
+
+int block_id(char *name) {
+	int id = 0;
+
+	ENTRY e;
+	e.key = name;
+	ENTRY *found = hsearch(e, FIND);
+	if (found != NULL)
+		id = *((int *) found->data);
+
+	return id;
+}
