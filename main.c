@@ -36,17 +36,17 @@ EVP_PKEY_CTX *pkey_ctx_init(EVP_PKEY *);
 int handle_connection(int conn_fd, EVP_PKEY_CTX *ctx, const uint8_t *der);
 
 int main() {
+	/* socket init */
+	int sfd = bind_socket();
+	if (sfd < 0)
+		exit(EXIT_FAILURE);
+
 	/* make sure level exists + load the block table */
 	int failed = check_level_path(LEVEL_PATH);
 	if (failed)
 		exit(EXIT_FAILURE);
 	failed = create_block_table(BLOCKS_PATH);
 	if (failed)
-		exit(EXIT_FAILURE);
-
-	/* socket init */
-	int sfd = bind_socket();
-	if (sfd < 0)
 		exit(EXIT_FAILURE);
 
 	/* RSA keygen */
