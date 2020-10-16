@@ -7,6 +7,9 @@ TARGET=chowder
 $(TARGET): main.o protocol.o server.o conn.o packet.o nbt.o region.o blockstates.o blocks.o
 	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
 
+debug: CFLAGS += -g
+debug: $(TARGET)
+
 main.o: protocol.o server.o conn.o
 
 protocol.o: nbt.o packet.o conn.o region.o blockstates.o
