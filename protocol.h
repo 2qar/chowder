@@ -5,6 +5,7 @@
 
 #include "conn.h"
 #include "packet.h"
+#include "region.h"
 
 int handshake(int);
 int server_list_ping(int);
@@ -20,7 +21,7 @@ int client_settings(struct conn *);
 int window_items(struct conn *);
 int held_item_change_clientbound(struct conn *, uint8_t slot);
 int spawn_position(struct conn *, uint16_t, uint16_t, uint16_t);
-int chunk_data(struct conn *, int, int, bool);
+int chunk_data(struct conn *, const struct chunk *, int x, int y, bool full);
 int player_position_look(struct conn *, int *teleport_id);
 int teleport_confirm(struct recv_packet *, int server_teleport_id);
 int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id);

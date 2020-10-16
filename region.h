@@ -1,3 +1,6 @@
+#ifndef CHOWDER_REGION_H
+#define CHOWDER_REGION_H
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -31,3 +34,5 @@ struct chunk *parse_chunk(Bytef *chunk_data);
 size_t network_blockstates(const struct section *, uint64_t **);
 void free_chunk(struct chunk *);
 void free_region(struct region *);
+
+#endif

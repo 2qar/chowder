@@ -203,10 +203,34 @@ int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
 		return 1;
 	}
 
-	for (int y = 0; y < 7; ++y)
-		for (int x = 0; x < 7; ++x)
-			chunk_data(&c, x, y, true);
-	puts("wrote the chunks");
+	struct region r = {0};
+	FILE *f = fopen(LEVEL_PATH "/region/r.0.0.mca", "r");
+	if (f == NULL) {
+		puts("error opening region file");
+		return 1;
+	}
+	size_t chunk_buf_len = 0;
+	Bytef *chunk_buf = NULL;
+	for (int y = 0; y < 7; ++y) {
+		for (int x = 0; x < 7; ++x) {
+			int uncompressed_len = read_chunk(f, x, y, &chunk_buf_len, &chunk_buf);
+			if (uncompressed_len > 0) {
+				struct chunk *chunk = parse_chunk(chunk_buf);
+				if (chunk == NULL) {
+					fprintf(stderr, "also panic\n");
+					return -1;
+				}
+
+				chunk_data(&c, chunk, x, y, true);
+
+				r.chunks[x][y] = chunk;
+			} else if (uncompressed_len < 0) {
+				fprintf(stderr, "fuckin panic");
+			}
+		}
+	}
+	fclose(f);
+	free(chunk_buf);
 
 	if (spawn_position(&c, 0, 0, 0) < 0) {
 		fprintf(stderr, "error sending spawn position\n");
@@ -268,6 +292,7 @@ int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
 		}
 	}
 
+	free_region(&r);
 	conn_finish(&c);
 	return 0;
 }

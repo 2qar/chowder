@@ -299,37 +299,13 @@ size_t write_section_to_packet(const struct section *s, struct send_packet *p) {
 	return p->_packet_len;
 }
 
-int chunk_data(struct conn *c, int x, int y, bool full) {
+int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool full) {
 	struct send_packet p = {0};
 	make_packet(&p, 0x22);
 
 	write_int(&p, x);
 	write_int(&p, y);
 	write_byte(&p, full);
-
-	/* FIXME: take a pre-loaded chunk instead of
-	 *        loading the chunk here */
-	/* hardcoded path bad */
-	FILE *f = fopen("levels/default/region/r.0.0.mca", "r");
-	if (f == NULL) {
-		puts("error opening region file");
-		return -1;
-	}
-	size_t chunk_data_len = 0;
-	Bytef *chunk_data = NULL;
-	int uncompressed_len = read_chunk(f, x, y, &chunk_data_len, &chunk_data);
-	if (uncompressed_len == 0) {
-		return 0;
-	} else if (uncompressed_len < 0) {
-		fprintf(stderr, "fuckin panic\n");
-		return 0;
-	}
-	fclose(f);
-	struct chunk *chunk = parse_chunk(chunk_data);
-	if (chunk == NULL) {
-		fprintf(stderr, "also panic\n");
-		return -1;
-	}
 
 	/* primary bit mask */
 	int section_bit_mask = 0;
@@ -369,7 +345,6 @@ int chunk_data(struct conn *c, int x, int y, bool full) {
 		for (unsigned int i = 0; i < block_data[s]._packet_len; ++i)
 			write_byte(&p, block_data[s]._data[i]);
 	free(block_data);
-	free(chunk);
 
 	/* # of block entities */
 	/* TODO: implement block entities */
