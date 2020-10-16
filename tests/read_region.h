@@ -1,1 +1,1 @@
-int test_read_region();
+void read_and_verify_region();

@@ -57,12 +57,12 @@ void read_blockstates(int blockstates[BLOCKSTATES_LEN], int bits_per_block, size
 int write_blockstate(int offset, int bits_per_block, int **current_blockstate, uint64_t *out) {
 	int written = offset;
 	if (offset > 0) {
-		*out |= **current_blockstate >> (bits_per_block - offset);
+		*out |= ((uint64_t) (**current_blockstate)) >> (bits_per_block - offset);
 		++(*current_blockstate);
 	}
 
 	while (written + bits_per_block < 64) {
-		*out |= **current_blockstate << written;
+		*out |= ((uint64_t) (**current_blockstate)) << written;
 		++(*current_blockstate);
 		written += bits_per_block;
 	}
@@ -70,25 +70,19 @@ int write_blockstate(int offset, int bits_per_block, int **current_blockstate, u
 	offset = written + bits_per_block - 64;
 	if (offset > 0) {
 		int readable = bits_per_block - offset;
-		*out |= (**current_blockstate & mask_gen(readable)) << written;
+		*out |= ((uint64_t) (**current_blockstate & mask_gen(readable))) << written;
 	}
 
 	return offset;
 }
 
 size_t write_blockstates(int blockstates[BLOCKSTATES_LEN], int bits_per_block, uint64_t **out) {
-	size_t out_len = BLOCKSTATES_LEN * bits_per_block / sizeof(uint64_t);
+	size_t out_len = BLOCKSTATES_LEN * bits_per_block / 64;
 	*out = malloc(sizeof(uint64_t) * out_len);
 
-	/* write blockstates in host order */
 	int offset = 0;
 	for (size_t i = 0; i < out_len; ++i) {
 		offset = write_blockstate(offset, bits_per_block, &blockstates, *out + i);
-	}
-
-	/* switch them to network order */
-	for (size_t i = 0; i < out_len; ++i) {
-		(*out)[i] = htobe64((*out)[i]);
 	}
 
 	return out_len;

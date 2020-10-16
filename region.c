@@ -151,7 +151,6 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 		return NULL;
 	}
 	c->sections_len = nbt_list_len(&nbt_data);
-	printf("parsing %d sections\n", c->sections_len);
 
 	for (int i = 0; i < c->sections_len; ++i) {
 		struct section *s = calloc(1, sizeof(struct section));
