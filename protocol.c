@@ -273,7 +273,7 @@ size_t write_section_to_packet(const struct section *s, struct send_packet *p) {
 
 	/* count non-air blocks */
 	uint16_t block_count = 0;
-	for (int b = 0; b < BLOCKSTATES_LEN; ++b)
+	for (int b = 0; b < TOTAL_BLOCKSTATES; ++b)
 		if (s->blockstates[b] != 0)
 			++block_count;
 	write_short(p, block_count);
@@ -287,14 +287,10 @@ size_t write_section_to_packet(const struct section *s, struct send_packet *p) {
 		write_varint(p, s->palette[i]);
 
 	/* write the blocks */
-	/* FIXME: the client is receiving chunks properly,
-	 *        but every block is air */
-	uint64_t *blockstates = NULL;
-	size_t blockstates_len = network_blockstates(s, &blockstates);
+	size_t blockstates_len = BLOCKSTATES_LEN(s->bits_per_block);
 	write_varint(p, blockstates_len);
 	for (size_t b = 0; b < blockstates_len; ++b)
-		write_long(p, blockstates[b]);
-	free(blockstates);
+		write_long(p, s->blockstates[b]);
 
 	return p->_packet_len;
 }

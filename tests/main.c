@@ -2,12 +2,10 @@
 
 #include "read_region.h"
 #include "parse_blocks.h"
-#include "write_blockstates.h"
+#include "write_blockstate.h"
 
 int main() {
-	test_write_blockstates();
-
 	test_parse_blocks();
-
-	read_and_verify_region();
+	test_read_region();
+	test_write_blockstate_at();
 }

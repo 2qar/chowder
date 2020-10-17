@@ -64,16 +64,15 @@ ssize_t read_chunk(FILE *f, int x, int y, size_t *chunk_buf_len, Bytef **chunk) 
 	return uncompressed_len;
 }
 
-void parse_blockstates(struct section *s, struct nbt *nbt_data, int blockstates_index) {
+void read_blockstates(struct section *s, struct nbt *nbt_data, int blockstates_index) {
 	nbt_data->_index = blockstates_index;
 	nbt_skip_tag_name(nbt_data);
-	size_t blockstates_len = nbt_read_int(nbt_data);
-	uint64_t *nbt_blockstates = malloc(sizeof(uint64_t) * blockstates_len);
-	memcpy(nbt_blockstates, nbt_data->data + nbt_data->_index, s->bits_per_block * 4096 / 8);
-	for (size_t i = 0; i < blockstates_len; ++i)
-		nbt_blockstates[i] = be64toh(nbt_blockstates[i]);
-	read_blockstates(s->blockstates, s->bits_per_block, blockstates_len, nbt_blockstates);
-	free(nbt_blockstates);
+	size_t be_blockstates_len = nbt_read_int(nbt_data);
+	uint64_t *be_blockstates = malloc(sizeof(uint64_t) * be_blockstates_len);
+	memcpy(be_blockstates, nbt_data->data + nbt_data->_index, s->bits_per_block * 4096 / 8);
+	for (size_t i = 0; i < be_blockstates_len; ++i)
+		be_blockstates[i] = be64toh(be_blockstates[i]);
+	s->blockstates = be_blockstates;
 }
 
 char *parse_block_properties(struct nbt *n, int properties_index) {
@@ -177,8 +176,8 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 		nbt_data._index = section_start;
 		int blockstates_index = nbt_compound_seek_tag(&nbt_data, TAG_Long_Array, "BlockStates");
 		if (blockstates_index != -1 && s->bits_per_block != -1) {
-			s->blockstates = malloc(sizeof(int) * BLOCKSTATES_LEN);
-			parse_blockstates(s, &nbt_data, blockstates_index);
+			s->blockstates = malloc(sizeof(int) * TOTAL_BLOCKSTATES);
+			read_blockstates(s, &nbt_data, blockstates_index);
 		}
 
 		nbt_data._index = section_start;
@@ -189,8 +188,64 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 	return c;
 }
 
-size_t network_blockstates(const struct section *s, uint64_t **out) {
-	return write_blockstates(s->blockstates, s->bits_per_block, out);
+uint8_t bitmask(int size) {
+	/* probably not necessary xd */
+	if (size > 8)
+		return 0xff;
+
+	uint8_t mask = 0;
+	for (int i = 0; i < size; ++i)
+		mask |= 1 << i;
+	return mask;
+}
+
+int block_index(int x, int y, int z) {
+	return x + (z * 16) + (y * 16 * 16);
+}
+
+int read_blockstate_at(const struct section *s, int x, int y, int z) {
+	uint64_t mask = bitmask(s->bits_per_block);
+	int offset = block_index(x, y, z) * s->bits_per_block;
+
+	int blockstates_idx = (int) floor(offset / 64.0);
+	offset %= 64;
+
+	if (offset + s->bits_per_block > 64) {
+		mask = bitmask(64 - offset);
+	}
+	int blockstate = (s->blockstates[blockstates_idx] & (mask << offset)) >> offset;
+	if (offset + s->bits_per_block > 64) {
+		int bits_left = offset + s->bits_per_block - 64;
+		mask = bitmask(bits_left);
+		blockstate |= (s->blockstates[blockstates_idx + 1] & mask) << (s->bits_per_block - bits_left);
+	}
+	return blockstate;
+}
+
+void write_blockstate_at(struct section *s, int x, int y, int z, int value) {
+	/* TODO: between read_blockstate_at and write_blockstate_at, 
+	 *       the first like 6 lines are identical, so maybe
+	 *       make a function for that
+	 */
+	uint64_t mask = bitmask(s->bits_per_block);
+	int offset = block_index(x, y, z) * s->bits_per_block;
+
+	int blockstates_idx = (int) floor(offset / 64.0);
+	offset %= 64;
+
+	if (offset + s->bits_per_block > 64) {
+		mask = bitmask(64 - offset);
+	}
+	uint64_t *blockstate = &(s->blockstates[blockstates_idx]);
+	*blockstate &= (UINT64_MAX - (mask << offset));
+	*blockstate |= ((uint64_t) value & mask) << offset;
+	if (offset + s->bits_per_block > 64) {
+		int bits_left = offset + s->bits_per_block - 64;
+		mask = bitmask(bits_left);
+		++blockstate;
+		*blockstate &= UINT64_MAX - mask;
+		*blockstate |= (((uint64_t) value >> (s->bits_per_block - bits_left)) & mask) << (s->bits_per_block - bits_left);
+	}
 }
 
 void free_section(struct section *s) {

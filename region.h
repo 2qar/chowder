@@ -15,7 +15,7 @@ struct section {
 	 *       maybe just set the ID to -1 when their ref count hits 0 idk */
 	int *palette;
 	int bits_per_block;
-	int *blockstates;
+	uint64_t *blockstates;
 };
 
 struct chunk {
@@ -31,7 +31,8 @@ struct region {
 
 ssize_t read_chunk(FILE *f, int x, int y, size_t *chunk_buf_len, Bytef **chunk);
 struct chunk *parse_chunk(Bytef *chunk_data);
-size_t network_blockstates(const struct section *, uint64_t **);
+int read_blockstate_at(const struct section *s, int x, int y, int z);
+void write_blockstate_at(struct section *s, int x, int y, int z, int value);
 void free_chunk(struct chunk *);
 void free_region(struct region *);
 
