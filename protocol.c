@@ -7,7 +7,6 @@
 #include <openssl/err.h>
 #include <zlib.h>
 
-#include "blockstates.h"
 #include "protocol.h"
 #include "region.h"
 #include "nbt.h"

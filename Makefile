@@ -4,7 +4,7 @@ LIBSSL=`pkg-config --libs openssl`
 LIBS=$(LIBSSL) -lm -lz
 TARGET=chowder
 
-$(TARGET): main.o protocol.o server.o conn.o packet.o nbt.o region.o blocks.o
+$(TARGET): main.o protocol.o server.o conn.o packet.o nbt.o region.o section.o blocks.o
 	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
 
 debug: CFLAGS += -g
@@ -20,7 +20,7 @@ conn.o: packet.o
 
 packet.o: nbt.o
 
-region.o: nbt.o
+region.o: section.o nbt.o
 
 clean:
 	rm -f *.o $(TARGET)

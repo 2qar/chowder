@@ -5,7 +5,6 @@
 
 #include "read_region.h"
 #include "../region.h"
-#include "../blockstates.h"
 
 int verify_blockstates(struct section *s) {
 	int err = 0;
