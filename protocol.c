@@ -304,9 +304,9 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 
 	/* primary bit mask */
 	int section_bit_mask = 0;
-	for (int i = 0; i < chunk->sections_len; ++i) {
+	for (int i = 1; i < chunk->sections_len; ++i) {
 		int has_blocks = chunk->sections[i]->bits_per_block > 0;
-		section_bit_mask |= (has_blocks << i);
+		section_bit_mask |= (has_blocks << (i - 1));
 	}
 	write_varint(&p, section_bit_mask);
 
@@ -331,7 +331,7 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	 */
 	size_t data_len = 0;
 	struct send_packet *block_data = calloc(chunk->sections_len, sizeof(struct send_packet));
-	for (int i = 0; i < chunk->sections_len; ++i)
+	for (int i = 1; i < chunk->sections_len; ++i)
 		data_len += write_section_to_packet(chunk->sections[i], &(block_data[i]));
 
 	/* write sections from before */

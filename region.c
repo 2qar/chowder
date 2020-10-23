@@ -158,8 +158,6 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 		int y_index = nbt_compound_seek_tag(&nbt_data, TAG_Byte, "Y");
 		if (y_index != -1) {
 			nbt_data._index = y_index;
-			/* XXX: For some reason, the first section of every chunk is
-			 *      y = -1 instead of y = 0 ???? */
 			s->y = nbt_read_byte(&nbt_data);
 		}
 		nbt_data._index = section_start;
