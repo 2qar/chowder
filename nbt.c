@@ -193,10 +193,17 @@ int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compo
 				enum tag tag = nbt_read_byte_tagless(n);
 				uint8_t list_len = nbt_read_int(n);
 				if (tag == TAG_Compound) {
-					for (uint8_t i = 0; i < list_len; ++i) {
-						int index = nbt_tag_seek_iter(n, t, name, 1);
-						if (index != -1)
-							return index;
+					if (t == TAG_End) {
+						for (uint8_t i = 0; i < list_len; ++i)
+							/* seek for a tag that doesn't exist,
+							 * skipping to the end */
+							nbt_tag_seek_iter(n, -1, "", 1);
+					} else {
+						for (uint8_t i = 0; i < list_len; ++i) {
+							int index = nbt_tag_seek_iter(n, t, name, 1);
+							if (index != -1)
+								return index;
+						}
 					}
 				} else if (tag != TAG_End) {
 					n->_index += list_len * nbt_tag_len(n, tag);

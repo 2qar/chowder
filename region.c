@@ -153,6 +153,8 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 	for (int i = 0; i < c->sections_len; ++i) {
 		struct section *s = calloc(1, sizeof(struct section));
 		int section_start = nbt_data._index;
+		int section_end = nbt_compound_seek_end(&nbt_data);
+		nbt_data._index = section_start;
 
 		/* read this section's Y index */
 		int y_index = nbt_compound_seek_tag(&nbt_data, TAG_Byte, "Y");
@@ -177,8 +179,7 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 			read_blockstates(s, &nbt_data, blockstates_index);
 		}
 
-		nbt_data._index = section_start;
-		nbt_compound_seek_end(&nbt_data);
+		nbt_data._index = section_end;
 		c->sections[i] = s;
 	}
 
