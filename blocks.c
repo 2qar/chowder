@@ -43,13 +43,19 @@ int jstrncmp(char *s, char *blocks_json, jsmntok_t *t) {
 	return strncmp(s, blocks_json + t->start, toklen(t));
 }
 
+struct json {
+	char *src;
+	int tokens_len;
+	jsmntok_t *tokens;
+};
+
 /* assumes that the block IDs in blocks.json are sorted */
-int max_block_id(char *blocks_json, int tokens_len, jsmntok_t *tokens) {
-	int i = tokens_len - 1;
+int max_block_id(struct json *j) {
+	int i = j->tokens_len - 1;
 	int max_id_index = -1;
 	while (i > 0 && max_id_index < 0) {
-		if (tokens[i].type == JSMN_STRING && 
-				jstrncmp("id", blocks_json, &(tokens[i])) == 0) {
+		if (j->tokens[i].type == JSMN_STRING && 
+				jstrncmp("id", j->src, &(j->tokens[i])) == 0) {
 			max_id_index = i + 1;
 		}
 		--i;
@@ -58,17 +64,11 @@ int max_block_id(char *blocks_json, int tokens_len, jsmntok_t *tokens) {
 	int max_id = -1;
 	if (max_id_index != -1) {
 		char id_str[16] = {0};
-		snprintf(id_str, 16, "%.*s", toklen(&tokens[max_id_index]), blocks_json + tokens[max_id_index].start);
+		snprintf(id_str, 16, "%.*s", toklen(&(j->tokens[max_id_index])), j->src + j->tokens[max_id_index].start);
 		max_id = atoi(id_str);
 	}
 	return max_id;
 }
-
-struct json {
-	char *src;
-	int tokens_len;
-	jsmntok_t *tokens;
-};
 
 int jseek(struct json *j, char *s, int from) {
 	int index = -1;
@@ -187,7 +187,7 @@ int create_block_table_from_json(char *blocks_json) {
 	j.src = blocks_json;
 	j.tokens_len = tokens;
 	j.tokens = t;
-	int block_ids = max_block_id(blocks_json, tokens, t) + 1;
+	int block_ids = max_block_id(&j) + 1;
 	/* hcreate(3) said 25% extra space helps w/ performance sooo */
 	hcreate(block_ids * (block_ids / 4));
 	int parsed = parse_blocks_json(&j);
