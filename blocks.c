@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,8 +39,8 @@ int toklen(jsmntok_t *t) {
 	return t->end - t->start;
 }
 
-int jstrncmp(char *s, char *blocks_json, jsmntok_t *tokens, int i) {
-	return strncmp(s, blocks_json + tokens[i].start, toklen(&tokens[i]));
+int jstrncmp(char *s, char *blocks_json, jsmntok_t *t) {
+	return strncmp(s, blocks_json + t->start, toklen(t));
 }
 
 /* assumes that the block IDs in blocks.json are sorted */
@@ -48,7 +49,7 @@ int max_block_id(char *blocks_json, int tokens_len, jsmntok_t *tokens) {
 	int max_id_index = -1;
 	while (i > 0 && max_id_index < 0) {
 		if (tokens[i].type == JSMN_STRING && 
-				jstrncmp("id", blocks_json, tokens, i) == 0) {
+				jstrncmp("id", blocks_json, &(tokens[i])) == 0) {
 			max_id_index = i + 1;
 		}
 		--i;
@@ -63,80 +64,110 @@ int max_block_id(char *blocks_json, int tokens_len, jsmntok_t *tokens) {
 	return max_id;
 }
 
+struct json {
+	char *src;
+	int tokens_len;
+	jsmntok_t *tokens;
+};
+
+int jseek(struct json *j, char *s, int from) {
+	int index = -1;
+
+	for (int i = from; i < j->tokens_len && index == -1; ++i) {
+		if (j->tokens[i].type == JSMN_STRING &&
+				jstrncmp(s, j->src, &(j->tokens[i])) == 0) {
+			index = i;
+		}
+	}
+
+	return index;
+}
+
+int parse_block_states(struct json *j, char *block_name, int state_index, int *count) {
+	char prop_name[256] = {0};
+	snprintf(prop_name, 256, "%s", block_name);
+	int state_end = j->tokens[state_index].end;
+	int i = state_index;
+
+	int properties_index = jseek(j, "properties", state_index);
+	if (properties_index != -1 && j->tokens[properties_index].start < state_end) {
+		i = properties_index;
+
+		++i;
+		int prop_end = j->tokens[i].end;
+		assert(j->tokens[i].type == JSMN_OBJECT);
+		++i;
+		while (j->tokens[i].start < prop_end) {
+			/* add property name */
+			strcat(prop_name, ";");
+			strncat(prop_name, j->src + j->tokens[i].start, toklen(&(j->tokens[i])));
+			++i;
+			/* add property value */
+			strcat(prop_name, "=");
+			strncat(prop_name, j->src + j->tokens[i].start, toklen(&(j->tokens[i])));
+			++i;
+		}
+	}
+
+	int id_index = jseek(j, "id", state_index);
+	if (id_index != -1 && j->tokens[id_index].start < state_end) {
+		i = id_index + 1;
+		assert(j->tokens[i].type == JSMN_PRIMITIVE);
+
+		char id_str[16];
+		snprintf(id_str, 16, "%.*s", toklen(&(j->tokens[i])), j->src + j->tokens[i].start);
+		int id = atoi(id_str);
+
+		ENTRY e;
+		e.key = malloc(sizeof(char) * strlen(prop_name)+1);
+		snprintf(e.key, strlen(prop_name)+1, "%s", prop_name);
+		e.data = malloc(sizeof(int));
+		memcpy(e.data, (void *) &id, sizeof(int));
+
+		if (hsearch(e, ENTER) == NULL) {
+			fprintf(stderr, "error adding to table\n");
+		} else {
+			++(*count);
+		}
+	}
+
+	i = state_index;
+	while (i < j->tokens_len && j->tokens[i].start < state_end)
+		++i;
+
+	//if (j->tokens[i].type == JSMN_UNDEFINED)
+	//	i = j->tokens_len;
+
+	return i;
+}
+
 /* parse each of the block IDs into a hashtable */
-int parse_blocks_json(char *blocks_json, int tokens_len, jsmntok_t *tokens) {
+int parse_blocks_json(struct json *j) {
 	int count = 0;
 	int i = 1;
 	int name_len = 128;
 	char name[128] = {0};
-	char prop_name[256] = {0};
-	while (i < tokens_len && tokens[i].type == JSMN_STRING) {
-		snprintf(name, name_len, "%.*s", toklen(&tokens[i]), blocks_json + tokens[i].start);
-
-		/* read length of block object and skip to first token in it */
+	while (i < j->tokens_len && j->tokens[i].type == JSMN_STRING) {
+		snprintf(name, name_len, "%.*s", toklen(&(j->tokens[i])), j->src + j->tokens[i].start);
 		++i;
-		int block_token_end = tokens[i].end;
 
-		/* iterate over tokens until we're at the next block */
-		while (i < tokens_len && tokens[i].start < block_token_end) {
+		assert(j->tokens[i].type == JSMN_OBJECT);
+		int block_token_end = j->tokens[i].end;
+
+		int states_index = jseek(j, "states", i);
+		if (states_index != -1) {
+			i = states_index + 1;
+			assert(j->tokens[i].type == JSMN_ARRAY);
+			int states_index = i;
+			int states_end = j->tokens[states_index].end;
 			++i;
-			if (tokens[i].type == JSMN_STRING && 
-					jstrncmp("states", blocks_json, tokens, i) == 0) {
-				snprintf(prop_name, 256, "%s", name);
-				++i;
-				int states_end = tokens[i].end;
-				/* skip to (maybe) properties */
-				++i;
-				while (i < tokens_len && tokens[i].start < states_end) {
-					if (tokens[i].type == JSMN_STRING) {
-						/* FIXME: if this state is the default state (the first one),
-						 *        ignore the properties and their values and just
-						 *        use the block's name as the key.
-						 *        or, insert an extra key for the default state that's
-						 *        just the block's name */
-						if (jstrncmp("properties", blocks_json, tokens, i) == 0) {
-							snprintf(prop_name, 256, "%s", name);
-							++i;
-							int prop_end = tokens[i].end;
-							++i;
-							while (tokens[i].start < prop_end) {
-								/* FIXME: 7 levels of indentation? 
-								 * there has to be a better way 
-								 */
-
-								/* add property name */
-								strcat(prop_name, ";");
-								strncat(prop_name, blocks_json + tokens[i].start, toklen(&tokens[i]));
-								++i;
-								/* add property value */
-								strcat(prop_name, "=");
-								strncat(prop_name, blocks_json + tokens[i].start, toklen(&tokens[i]));
-								++i;
-							}
-							--i;
-						} else if (jstrncmp("id", blocks_json, tokens, i) == 0) {
-							++i;
-							char id_str[16];
-							snprintf(id_str, 16, "%.*s", toklen(&tokens[i]), blocks_json + tokens[i].start);
-							int id = atoi(id_str);
-
-							ENTRY e;
-							e.key = malloc(sizeof(char) * strlen(prop_name)+1);
-							snprintf(e.key, strlen(prop_name)+1, "%s", prop_name);
-							e.data = malloc(sizeof(int));
-							memcpy(e.data, (void *) &id, sizeof(int));
-
-							if (hsearch(e, ENTER) == NULL) {
-								fprintf(stderr, "error adding to table\n");
-							} else {
-								++count;
-							}
-						}
-					}
-					++i;
-				}
-			}
+			assert(j->tokens[i].type == JSMN_OBJECT);
+			while (i < j->tokens_len && j->tokens[i].start < states_end)
+				i = parse_block_states(j, name, i, &count);
 		}
+
+		while (i < j->tokens_len && j->tokens[i].start < block_token_end)
+			++i;
 	}
 	return count;
 }
@@ -152,10 +183,14 @@ int create_block_table_from_json(char *blocks_json) {
 	}
 	t = realloc(t, sizeof(jsmntok_t) * tokens);
 
+	struct json j = {0};
+	j.src = blocks_json;
+	j.tokens_len = tokens;
+	j.tokens = t;
 	int block_ids = max_block_id(blocks_json, tokens, t) + 1;
 	/* hcreate(3) said 25% extra space helps w/ performance sooo */
 	hcreate(block_ids * (block_ids / 4));
-	int parsed = parse_blocks_json(blocks_json, tokens, t);
+	int parsed = parse_blocks_json(&j);
 	if (parsed != block_ids) {
 		fprintf(stderr, "too few blocks parsed; parsed (%d) != block_ids (%d)\n", parsed, block_ids);
 		return 1;
