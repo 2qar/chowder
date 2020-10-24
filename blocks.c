@@ -149,9 +149,6 @@ int parse_block_states(struct json *j, char *block_name, int state_index, int *c
 	while (i < j->tokens_len && j->tokens[i].start < state_end)
 		++i;
 
-	//if (j->tokens[i].type == JSMN_UNDEFINED)
-	//	i = j->tokens_len;
-
 	return i;
 }
 
