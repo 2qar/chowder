@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <search.h>
 
@@ -83,11 +84,32 @@ int jseek(struct json *j, char *s, int from) {
 	return index;
 }
 
+int add_block_id(char *name, int id) {
+	ENTRY e;
+	e.key = malloc(sizeof(char) * strlen(name) + 1);
+	snprintf(e.key, strlen(name)+1, "%s", name);
+	e.data = malloc(sizeof(int));
+	memcpy(e.data, (void *) &id, sizeof(int));
+
+	ENTRY *result = hsearch(e, ENTER);
+	if (result == NULL) {
+		fprintf(stderr, "error adding '%s' to table\n", name);
+	}
+	return result != NULL;
+}
+
 int parse_block_states(struct json *j, char *block_name, int state_index, int *count) {
 	char prop_name[256] = {0};
 	snprintf(prop_name, 256, "%s", block_name);
 	int state_end = j->tokens[state_index].end;
 	int i = state_index;
+
+	bool is_default = false;
+	int default_index = jseek(j, "default", state_index);
+	if (default_index != -1 && j->tokens[default_index].start < state_end) {
+		/* assumes that the value for "default" is true */
+		is_default = true;
+	}
 
 	int properties_index = jseek(j, "properties", state_index);
 	if (properties_index != -1 && j->tokens[properties_index].start < state_end) {
@@ -118,17 +140,9 @@ int parse_block_states(struct json *j, char *block_name, int state_index, int *c
 		snprintf(id_str, 16, "%.*s", toklen(&(j->tokens[i])), j->src + j->tokens[i].start);
 		int id = atoi(id_str);
 
-		ENTRY e;
-		e.key = malloc(sizeof(char) * strlen(prop_name)+1);
-		snprintf(e.key, strlen(prop_name)+1, "%s", prop_name);
-		e.data = malloc(sizeof(int));
-		memcpy(e.data, (void *) &id, sizeof(int));
-
-		if (hsearch(e, ENTER) == NULL) {
-			fprintf(stderr, "error adding to table\n");
-		} else {
-			++(*count);
-		}
+		*count += add_block_id(prop_name, id);
+		if (is_default && strncmp(block_name, prop_name, strlen(block_name)) == 0)
+			add_block_id(block_name, id);
 	}
 
 	i = state_index;
