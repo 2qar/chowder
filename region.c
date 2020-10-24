@@ -15,9 +15,9 @@
 
 #define COMPRESSION_TYPE_ZLIB 2
 
-ssize_t read_chunk(FILE *f, int x, int y, size_t *chunk_buf_len, Bytef **chunk) {
+ssize_t read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, Bytef **chunk) {
 	/* read the first chunk offset in the region file */
-	fseek(f, 4 * x * y, SEEK_SET);
+	fseek(f, 4 * ((x % 32) + (z % 32) * 32), SEEK_SET);
 	int offset = 0;
 	for (int i = 2; i >= 0; --i)
 		offset += fgetc(f) << (8 * i);

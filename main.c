@@ -211,9 +211,9 @@ int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
 	}
 	size_t chunk_buf_len = 0;
 	Bytef *chunk_buf = NULL;
-	for (int y = 0; y < 7; ++y) {
-		for (int x = 0; x < 7; ++x) {
-			int uncompressed_len = read_chunk(f, x, y, &chunk_buf_len, &chunk_buf);
+	for (int z = 0; z < 16; ++z) {
+		for (int x = 0; x < 16; ++x) {
+			int uncompressed_len = read_chunk(f, x, z, &chunk_buf_len, &chunk_buf);
 			if (uncompressed_len > 0) {
 				struct chunk *chunk = parse_chunk(chunk_buf);
 				if (chunk == NULL) {
@@ -221,9 +221,9 @@ int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
 					return -1;
 				}
 
-				chunk_data(&c, chunk, x, y, true);
+				chunk_data(&c, chunk, x, z, true);
 
-				r.chunks[x][y] = chunk;
+				r.chunks[x][z] = chunk;
 			} else if (uncompressed_len < 0) {
 				fprintf(stderr, "fuckin panic");
 			}
