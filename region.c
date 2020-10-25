@@ -74,31 +74,54 @@ void read_blockstates(struct section *s, struct nbt *nbt_data, int blockstates_i
 	s->blockstates = be_blockstates;
 }
 
-char *parse_block_properties(struct nbt *n, int properties_index) {
-	size_t properties_len = 128;
-	char *properties = malloc(sizeof(char) * properties_len);
-	properties[0] = '\0';
+int strcoll_cmp(const void *p1, const void *p2) {
+	const char *s1 = *((const char **) p1);
+	const char *s2 = *((const char **) p2);
 
+	return strcoll(s1, s2);
+}
+
+char *parse_block_properties(struct nbt *n, int properties_index) {
 	n->_index = properties_index;
 	nbt_skip_tag_name(n);
 
-	/* read + append each property to the block's name */
-	size_t written = 0;
-	while (n->data[n->_index] != TAG_End && written < properties_len) {
+	int properties_len = 0;
+	char *properties[8] = {0};
+	size_t combined_len = 0;
+	while (n->data[n->_index] != TAG_End) {
 		int prop_start = n->_index;
 
-		char prop_name[32] = {0};
-		nbt_read_tag_name(n, 32, prop_name);
-		char prop_value[32] = {0};
+		char *property = malloc(sizeof(char) * 64);
+		int r = nbt_read_tag_name(n, 64, property);
+		strcat(property, "=");
+		++r;
 		n->_index = prop_start;
-		nbt_read_string(n, 32, prop_value);
+		r += nbt_read_string(n, 64 - r, property + r);
 
-		size_t remaining = properties_len - written;
-		char *start = properties + written;
-		written += snprintf(start, remaining, ";%s=%s", prop_name, prop_value);
+		properties[properties_len] = property;
+		combined_len += r;
+		++properties_len;
 	}
 
-	return properties;
+	char *s = "";
+	if (properties_len > 0) {
+		qsort(properties, properties_len, sizeof(char *), strcoll_cmp);
+
+		combined_len += properties_len;
+		char *combined = malloc(sizeof(char) * combined_len);
+		int written = 0;
+		for (int i = 0; i < properties_len; ++i) {
+			char *start = combined + written;
+			size_t remaining = combined_len - written;
+			written += snprintf(start, remaining, ";%s", properties[i]);
+		}
+
+		for (int i = 0; i < properties_len; ++i)
+			free(properties[i]);
+		s = combined;
+	}
+
+	return s;
 }
 
 int parse_palette_entry(struct nbt *n) {
