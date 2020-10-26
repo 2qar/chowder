@@ -15,6 +15,8 @@
 
 #define COMPRESSION_TYPE_ZLIB 2
 
+#define GLOBAL_BITS_PER_BLOCK 14
+
 ssize_t read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, Bytef **chunk) {
 	/* read the first chunk offset in the region file */
 	fseek(f, 4 * ((x % 32) + (z % 32) * 32), SEEK_SET);
@@ -155,6 +157,10 @@ void parse_palette(struct section *s, struct nbt *n, int palette_index) {
 	n->_index = palette_index;
 	s->palette_len = nbt_list_len(n);
 	s->bits_per_block = (int) ceil(log2(s->palette_len));
+	if (s->bits_per_block < 4)
+		s->bits_per_block = 4;
+	else if (s->bits_per_block > 8)
+		s->bits_per_block = GLOBAL_BITS_PER_BLOCK;
 
 	s->palette = malloc(sizeof(int) * s->palette_len);
 	for (int i = 0; i < s->palette_len; ++i)
