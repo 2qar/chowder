@@ -212,11 +212,13 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 void free_section(struct section *s) {
 	free(s->palette);
 	free(s->blockstates);
+	free(s);
 }
 
 void free_chunk(struct chunk *c) {
 	for (int i = 0; i < c->sections_len; ++i)
 		free_section(c->sections[i]);
+	free(c);
 }
 
 /* FIXME: misleading name, frees region data but not the struct itself. idk */
