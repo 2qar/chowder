@@ -68,12 +68,14 @@ ssize_t read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, Bytef **chunk) 
 void read_blockstates(struct section *s, struct nbt *nbt_data, int blockstates_index) {
 	nbt_data->_index = blockstates_index;
 	nbt_skip_tag_name(nbt_data);
-	size_t be_blockstates_len = nbt_read_int(nbt_data);
-	uint64_t *be_blockstates = malloc(sizeof(uint64_t) * be_blockstates_len);
-	memcpy(be_blockstates, nbt_data->data + nbt_data->_index, s->bits_per_block * 4096 / 8);
-	for (size_t i = 0; i < be_blockstates_len; ++i)
-		be_blockstates[i] = be64toh(be_blockstates[i]);
-	s->blockstates = be_blockstates;
+
+	size_t blockstates_len = nbt_read_int(nbt_data);
+	uint64_t *blockstates = malloc(sizeof(uint64_t) * blockstates_len);
+	memcpy(blockstates, nbt_data->data + nbt_data->_index, s->bits_per_block * TOTAL_BLOCKSTATES / 8);
+	for (size_t i = 0; i < blockstates_len; ++i)
+		blockstates[i] = be64toh(blockstates[i]);
+
+	s->blockstates = blockstates;
 }
 
 int strcoll_cmp(const void *p1, const void *p2) {
