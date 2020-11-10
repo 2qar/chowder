@@ -24,6 +24,7 @@ int test_parse_blocks() {
 	assert_block_exists("minecraft:stone", 1);
 	assert_block_exists("minecraft:beehive;facing=south;honey_level=3", 11320);
 	assert_block_exists("minecraft:honeycomb_block", 11336);
+	assert_block_exists("minecraft:poppy", 1412);
 
 	//hdestroy();
 	return 0;

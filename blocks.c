@@ -91,6 +91,10 @@ int add_block_id(char *name, int id) {
 	e.data = malloc(sizeof(int));
 	memcpy(e.data, (void *) &id, sizeof(int));
 
+	#ifdef BLOCK_NAMES
+	block_names[id] = e.key;
+	#endif
+
 	ENTRY *result = hsearch(e, ENTER);
 	if (result == NULL) {
 		fprintf(stderr, "error adding '%s' to table\n", name);
@@ -199,6 +203,9 @@ int create_block_table_from_json(char *blocks_json) {
 	j.tokens_len = tokens;
 	j.tokens = t;
 	int block_ids = max_block_id(&j) + 1;
+	#ifdef BLOCK_NAMES
+	block_names = malloc(sizeof(char *) * block_ids);
+	#endif
 	/* hcreate(3) said 25% extra space helps w/ performance sooo */
 	hcreate(block_ids * (block_ids / 4));
 	int parsed = parse_blocks_json(&j);
@@ -232,6 +239,8 @@ int block_id(char *name) {
 	ENTRY *found = hsearch(e, FIND);
 	if (found != NULL)
 		id = *((int *) found->data);
+	else
+		fprintf(stderr, "error finding a block ID for \"%s\"\n", name);
 
 	return id;
 }
