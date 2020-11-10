@@ -179,8 +179,6 @@ int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compo
 				n->_index = tag_start;
 				return tag_start;
 			}
-		} else if (t == TAG_End && compound_level == 1) {
-			return n->_index;
 		}
 
 		/* no match, skip this tag */
@@ -218,6 +216,9 @@ int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compo
 		}
 	} while (compound_level > 0);
 
+	if (t == TAG_End) {
+		return n->_index;
+	}
 	return -1;
 }
 
