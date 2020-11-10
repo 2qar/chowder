@@ -179,7 +179,7 @@ int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compo
 				n->_index = tag_start;
 				return tag_start;
 			}
-		} else if (t == TAG_End) {
+		} else if (t == TAG_End && compound_level == 1) {
 			return n->_index;
 		}
 

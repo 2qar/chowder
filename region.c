@@ -128,8 +128,6 @@ char *parse_block_properties(struct nbt *n, int properties_index) {
 	return s;
 }
 
-/* FIXME: something is wrong with this when a given blockstate has properties.
- *        check "utils/cv/NOTES" */
 int parse_palette_entry(struct nbt *n) {
 	size_t name_len = 128;
 	char *name = malloc(sizeof(char) * name_len);
