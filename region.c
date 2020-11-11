@@ -67,9 +67,8 @@ ssize_t read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, Bytef **chunk) 
 
 void read_blockstates(struct section *s, struct nbt *nbt_data, int blockstates_index) {
 	nbt_data->_index = blockstates_index;
-	nbt_skip_tag_name(nbt_data);
 
-	size_t blockstates_len = nbt_read_int(nbt_data);
+	size_t blockstates_len = nbt_array_len(nbt_data);
 	uint64_t *blockstates = malloc(sizeof(uint64_t) * blockstates_len);
 	memcpy(blockstates, nbt_data->data + nbt_data->_index, s->bits_per_block * TOTAL_BLOCKSTATES / 8);
 	for (size_t i = 0; i < blockstates_len; ++i)
@@ -211,6 +210,17 @@ struct chunk *parse_chunk(Bytef *chunk_data) {
 
 		nbt_data._index = section_end;
 		c->sections[i] = s;
+	}
+
+	c->biomes = NULL;
+	nbt_data._index = 0;
+	int biomes_index = nbt_tag_seek(&nbt_data, TAG_Int_Array, "Biomes");
+	if (biomes_index != -1) {
+		int biomes_len = nbt_array_len(&nbt_data);
+		assert(biomes_len == BIOMES_LEN);
+		c->biomes = malloc(sizeof(int) * biomes_len);
+		memcpy(c->biomes, nbt_data.data + nbt_data._index, sizeof(int) * biomes_len);
+		nbt_data._index += biomes_len;
 	}
 
 	return c;

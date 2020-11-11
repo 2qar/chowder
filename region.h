@@ -7,9 +7,12 @@
 
 #include "section.h"
 
+#define BIOMES_LEN 1024
+
 struct chunk {
 	int sections_len;
 	struct section *sections[16];
+	int *biomes;
 };
 
 struct region {

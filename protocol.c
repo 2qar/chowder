@@ -319,10 +319,15 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	write_nbt(&p, &n);
 	free(n.data);
 
-	if (full)
-		for (int i = 0; i < 1024; ++i)
-			/* TODO: don't just write desert for every biome xd */
-			write_int(&p, 2);
+	if (full) {
+		if (chunk->biomes != NULL) {
+			write_bytes_direct(&p, sizeof(int) * BIOMES_LEN, chunk->biomes);
+		} else {
+			for (int i = 0; i < BIOMES_LEN; ++i)
+				/* void biome */
+				write_int(&p, 127);
+		}
+	}
 
 	/* Write each chunk in this[0] format to temporary buffers
 	 * and record the total length of each buffer for writing

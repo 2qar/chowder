@@ -153,6 +153,12 @@ void write_bytes(struct send_packet *p, uint8_t *b, int n) {
 		write_byte(p, b[i]);
 }
 
+/* writes bytes without changing the byte order of the data */
+void write_bytes_direct(struct send_packet *p, size_t len, void *data) {
+	memcpy(p->_data + p->_packet_len, data, len);
+	p->_packet_len += len;
+}
+
 void write_short(struct send_packet *p, int16_t s) {
 	uint16_t ns = htons(s);
 	memcpy(p->_data + p->_packet_len, &ns, sizeof(uint16_t));

@@ -41,5 +41,6 @@ int nbt_tag_seek(struct nbt *, enum tag, const char *name);
 int nbt_compound_seek_tag(struct nbt *, enum tag, const char *name);
 int nbt_compound_seek_end(struct nbt *);
 int nbt_list_len(struct nbt *);
+int nbt_array_len(struct nbt *);
 
 #endif

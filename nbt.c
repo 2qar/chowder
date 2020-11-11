@@ -133,8 +133,7 @@ int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s) {
 	return nbt_read_tag_name_tagless(n, buf_len, s);
 }
 
-/* TODO: add "_tagless" to tagless read functions like this one */
-int32_t nbt_read_int(struct nbt *n) {
+int32_t nbt_read_int_tagless(struct nbt *n) {
 	int32_t v = 0;
 	for (int i = 3; i >= 0; --i)
 		v += nbt_read_byte_tagless(n) << (8 * i);
@@ -156,13 +155,13 @@ int nbt_tag_len(struct nbt *n, enum tag t) {
 		case TAG_Double:
 			return 8;
 		case TAG_Byte_Array:
-			return nbt_read_int(n);
+			return nbt_read_int_tagless(n);
 		case TAG_String:
 			return nbt_read_short(n);
 		case TAG_Int_Array:
-			return nbt_read_int(n) * 4;
+			return nbt_read_int_tagless(n) * 4;
 		case TAG_Long_Array:
-			return nbt_read_int(n) * 8;
+			return nbt_read_int_tagless(n) * 8;
 		default:
 			return 0;
 	}
@@ -189,7 +188,7 @@ int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compo
 			case TAG_List:
 				;
 				enum tag tag = nbt_read_byte_tagless(n);
-				uint8_t list_len = nbt_read_int(n);
+				uint8_t list_len = nbt_read_int_tagless(n);
 				if (tag == TAG_Compound) {
 					if (t == TAG_End) {
 						for (uint8_t i = 0; i < list_len; ++i)
@@ -244,5 +243,16 @@ int nbt_list_len(struct nbt *n) {
 	/* ignore the tag type, right now these parsing functions are only for
 	 * parsing chunks, so all of the types are known beforehand */
 	nbt_read_byte_tagless(n);
-	return nbt_read_int(n);
+	return nbt_read_int_tagless(n);
+}
+
+/* like nbt_list_len() but for arrays */
+int nbt_array_len(struct nbt *n) {
+	enum tag t = nbt_read_byte_tagless(n);
+	assert(t == TAG_Byte_Array || t == TAG_Int_Array || t == TAG_Long_Array);
+
+	int16_t name_len = nbt_read_short(n);
+	n->_index += name_len;
+
+	return nbt_read_int_tagless(n);
 }
