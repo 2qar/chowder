@@ -43,17 +43,17 @@ void test_read_region() {
 	struct region *region = malloc(sizeof(struct region));
 	size_t chunk_len = 0;
 	Bytef *chunk_data = NULL;
-	for (int y = 0; y < 32; ++y) {
+	for (int z = 0; z < 32; ++z) {
 		for (int x = 0; x < 32; ++x) {
-			ssize_t n = read_chunk(f, x, y, &chunk_len, &chunk_data);
+			ssize_t n = read_chunk(f, x, z, &chunk_len, &chunk_data);
 			if (n < 0) {
-				fprintf(stderr, "error reading chunk @ (%d, %d)\n", x, y);
+				fprintf(stderr, "error reading chunk @ (%d, %d)\n", x, z);
 				exit(EXIT_FAILURE);
 			} else if (n > 0) {
 				struct chunk *c = parse_chunk(chunk_data);
 				if (verify_chunk(c) > 0)
 					exit(EXIT_FAILURE);
-				region->chunks[y][x] = c;
+				region->chunks[z][x] = c;
 			}
 		}
 	}

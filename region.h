@@ -17,7 +17,7 @@ struct chunk {
 
 struct region {
 	int x;
-	int y;
+	int z;
 	struct chunk *chunks[32][32];
 };
 
