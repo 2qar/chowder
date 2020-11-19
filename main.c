@@ -63,11 +63,13 @@ int main() {
 		exit(EXIT_FAILURE);
 
 	/* connection handling */
-	int conn;
-	if ((conn = accept(sfd, NULL, NULL)) != -1) {
-		handle_connection(conn, ctx, der);
-	} else {
-		perror("accept");
+	for (;;) {
+		int conn;
+		if ((conn = accept(sfd, NULL, NULL)) != -1) {
+			handle_connection(conn, ctx, der);
+		} else {
+			perror("accept");
+		}
 	}
 
 	free(der);
