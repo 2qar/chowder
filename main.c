@@ -20,6 +20,7 @@
 #include "protocol.h"
 #include "server.h"
 #include "conn.h"
+#include "world.h"
 
 #define PLAYERS    4
 #define PORT       25565
@@ -33,7 +34,7 @@ int bind_socket();
 int generate_key(EVP_PKEY **pkey);
 int rsa_der(EVP_PKEY *pkey, uint8_t **der);
 EVP_PKEY_CTX *pkey_ctx_init(EVP_PKEY *);
-int handle_connection(int conn_fd, EVP_PKEY_CTX *ctx, const uint8_t *der);
+int handle_connection(struct world *, int conn_fd, EVP_PKEY_CTX *ctx, const uint8_t *der);
 
 int main() {
 	/* socket init */
@@ -62,11 +63,13 @@ int main() {
 	if (ctx == NULL)
 		exit(EXIT_FAILURE);
 
+	struct world *w = world_new();
+
 	/* connection handling */
 	for (;;) {
 		int conn;
 		if ((conn = accept(sfd, NULL, NULL)) != -1) {
-			handle_connection(conn, ctx, der);
+			handle_connection(w, conn, ctx, der);
 		} else {
 			perror("accept");
 		}
@@ -171,7 +174,7 @@ EVP_PKEY_CTX *pkey_ctx_init(EVP_PKEY *pkey) {
 	return ctx;
 }
 
-int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
+int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
 	int next_state = handshake(conn);
 	if (next_state == 1) {
 		handle_server_list_ping(conn);
@@ -205,29 +208,40 @@ int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
 		return 1;
 	}
 
-	struct region r = {0};
+	struct region *r = world_region_at(w, 0, 0);
+	if (r == NULL) {
+		r = calloc(1, sizeof(struct region));
+		world_add_region(w, r);
+		puts("### ALLOCATING THE REGION FOR THE FIRST TIME ###");
+	}
 	FILE *f = fopen(LEVEL_PATH "/region/r.0.0.mca", "r");
 	if (f == NULL) {
-		puts("error opening region file");
-		return 1;
+		fprintf(stderr, "error opening region file\n");
+		return -1;
 	}
+	/* TODO: don't load chunks here or like this pls thanks */
 	size_t chunk_buf_len = 0;
 	Bytef *chunk_buf = NULL;
 	for (int z = 0; z < 16; ++z) {
 		for (int x = 0; x < 16; ++x) {
-			int uncompressed_len = read_chunk(f, x, z, &chunk_buf_len, &chunk_buf);
-			if (uncompressed_len > 0) {
-				struct chunk *chunk = parse_chunk(chunk_buf);
-				if (chunk == NULL) {
-					fprintf(stderr, "also panic\n");
+			struct chunk *chunk = r->chunks[z][x];
+			if (chunk == NULL) {
+				int uncompressed_len = read_chunk(f, x, z, &chunk_buf_len, &chunk_buf);
+				if (uncompressed_len > 0) {
+					chunk = parse_chunk(chunk_buf);
+					if (chunk == NULL) {
+						fprintf(stderr, "also panic\n");
+						return -1;
+					}
+				} else if (uncompressed_len < 0) {
+					fprintf(stderr, "fuckin panic");
 					return -1;
 				}
+			}
 
+			if (chunk != NULL) {
 				chunk_data(&c, chunk, x, z, true);
-
-				r.chunks[x][z] = chunk;
-			} else if (uncompressed_len < 0) {
-				fprintf(stderr, "fuckin panic");
+				r->chunks[z][x] = chunk;
 			}
 		}
 	}
@@ -273,7 +287,7 @@ int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
 					last_client_response = time(NULL);
 					break;
 				default:
-					printf("unimplemented packet 0x%02x\n", p.packet_id);
+					//printf("unimplemented packet 0x%02x\n", p.packet_id);
 					break;
 			}
 		} else if (polled < 0) {
@@ -294,7 +308,6 @@ int handle_connection(int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
 		}
 	}
 
-	free_region(&r);
 	conn_finish(&c);
 	return 0;
 }
