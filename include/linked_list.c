@@ -12,10 +12,8 @@ void list_prepend(struct node *list, size_t data_len, void *data) {
 	struct node *tmp = malloc(sizeof(struct node));
 	memcpy(tmp, list, sizeof(struct node));
 
-	struct node n;
-	memcpy(&(n.data), data, data_len);
-	n.next = tmp;
-	*list = n;
+	memcpy(&(list->data), data, data_len);
+	list->next = tmp;
 }
 
 void list_append(struct node *list, size_t data_len, void *data) {
