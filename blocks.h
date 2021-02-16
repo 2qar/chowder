@@ -1,5 +1,5 @@
 #ifdef BLOCK_NAMES
-char **block_names;
+extern char **block_names;
 #endif
 
 char *read_blocks_json(char *block_json_path);

@@ -13,6 +13,10 @@
 /* FIXME: this just happens to work and is also a little too many */
 #define TOKENS 800000
 
+#ifdef BLOCK_NAMES
+char **block_names;
+#endif
+
 char *read_blocks_json(char *blocks_json_path) {
 	FILE *f = fopen(blocks_json_path, "r");
 	if (f == NULL) {
