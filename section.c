@@ -48,14 +48,10 @@ int read_blockstate_at(const struct section *s, int x, int y, int z) {
 
 void write_blockstate_at(struct section *s, int x, int y, int z, int value) {
 	struct block_pos p = block_pos(s, x, y, z);
-	uint64_t *blockstate = &(s->blockstates[p.start_long]);
-	*blockstate &= (UINT64_MAX - (p.mask << p.offset));
-	*blockstate |= ((uint64_t) value & p.mask) << p.offset;
-	if (p.offset + s->bits_per_block > 64) {
-		int bits_left = p.offset + s->bits_per_block - 64;
-		p.mask = bitmask(bits_left);
-		++blockstate;
-		*blockstate &= UINT64_MAX - p.mask;
-		*blockstate |= (((uint64_t) value >> (s->bits_per_block - bits_left)) & p.mask) << (s->bits_per_block - bits_left);
+	uint64_t v = value & p.mask;
+	s->blockstates[p.start_long] |= (v << p.offset);
+	if (p.start_long != p.end_long) {
+		int end_offset = 64 - p.offset;
+		s->blockstates[p.end_long] |= v >> end_offset;
 	}
 }
