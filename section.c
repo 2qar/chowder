@@ -7,57 +7,55 @@ uint8_t bitmask(int size) {
 	if (size > 8)
 		return 0xff;
 
-	uint8_t mask = 0;
-	for (int i = 0; i < size; ++i)
-		mask |= 1 << i;
-	return mask;
+	return (1 << size) - 1;
 }
 
-int block_index(int x, int y, int z) {
-	return x + (z * 16) + (y * 16 * 16);
+struct block_pos {
+	uint64_t mask;
+	uint64_t offset;
+	int start_long;
+	int end_long;
+};
+
+struct block_pos block_pos(const struct section *s, int x, int y, int z) {
+	x %= 16;
+	y %= 16;
+	z %= 16;
+
+	struct block_pos p;
+	p.mask = bitmask(s->bits_per_block);
+
+	int block_index = x + ((y * 16) + z) * 16;
+	p.offset = (block_index * s->bits_per_block) % 64;
+	p.start_long = (block_index * s->bits_per_block) / 64;
+	p.end_long = ((block_index + 1) * s->bits_per_block) / 64;
+
+	return p;
 }
 
+/* Based on the deserialization implementation by #mcdevs
+ * https://wiki.vg/Chunk_Format#Deserializing
+ */
 int read_blockstate_at(const struct section *s, int x, int y, int z) {
-	uint64_t mask = bitmask(s->bits_per_block);
-	int offset = block_index(x, y, z) * s->bits_per_block;
-
-	int blockstates_idx = (int) floor(offset / 64.0);
-	offset %= 64;
-
-	if (offset + s->bits_per_block > 64) {
-		mask = bitmask(64 - offset);
+	struct block_pos p = block_pos(s, x, y, z);
+	int palette_index = s->blockstates[p.start_long] >> p.offset;
+	if (p.start_long != p.end_long) {
+		int end_offset = 64 - p.offset;
+		palette_index |= (s->blockstates[p.end_long] << end_offset);
 	}
-	int blockstate = (s->blockstates[blockstates_idx] & (mask << offset)) >> offset;
-	if (offset + s->bits_per_block > 64) {
-		int bits_left = offset + s->bits_per_block - 64;
-		mask = bitmask(bits_left);
-		blockstate |= (s->blockstates[blockstates_idx + 1] & mask) << (s->bits_per_block - bits_left);
-	}
-	return blockstate;
+	return palette_index & p.mask;
 }
 
 void write_blockstate_at(struct section *s, int x, int y, int z, int value) {
-	/* TODO: between read_blockstate_at and write_blockstate_at, 
-	 *       the first like 6 lines are identical, so maybe
-	 *       make a function for that
-	 */
-	uint64_t mask = bitmask(s->bits_per_block);
-	int offset = block_index(x, y, z) * s->bits_per_block;
-
-	int blockstates_idx = (int) floor(offset / 64.0);
-	offset %= 64;
-
-	if (offset + s->bits_per_block > 64) {
-		mask = bitmask(64 - offset);
-	}
-	uint64_t *blockstate = &(s->blockstates[blockstates_idx]);
-	*blockstate &= (UINT64_MAX - (mask << offset));
-	*blockstate |= ((uint64_t) value & mask) << offset;
-	if (offset + s->bits_per_block > 64) {
-		int bits_left = offset + s->bits_per_block - 64;
-		mask = bitmask(bits_left);
+	struct block_pos p = block_pos(s, x, y, z);
+	uint64_t *blockstate = &(s->blockstates[p.start_long]);
+	*blockstate &= (UINT64_MAX - (p.mask << p.offset));
+	*blockstate |= ((uint64_t) value & p.mask) << p.offset;
+	if (p.offset + s->bits_per_block > 64) {
+		int bits_left = p.offset + s->bits_per_block - 64;
+		p.mask = bitmask(bits_left);
 		++blockstate;
-		*blockstate &= UINT64_MAX - mask;
-		*blockstate |= (((uint64_t) value >> (s->bits_per_block - bits_left)) & mask) << (s->bits_per_block - bits_left);
+		*blockstate &= UINT64_MAX - p.mask;
+		*blockstate |= (((uint64_t) value >> (s->bits_per_block - bits_left)) & p.mask) << (s->bits_per_block - bits_left);
 	}
 }
