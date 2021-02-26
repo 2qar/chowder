@@ -88,7 +88,7 @@ void read_ushort(struct recv_packet *p, uint16_t *s) {
 void read_long(struct recv_packet *p, uint64_t *l) {
 	uint64_t hl = 0;
 	for (int i = 7; i >= 0; --i)
-		hl |= read_byte(p) << (i * 8);
+		hl |= ((uint64_t) read_byte(p)) << (i * 8);
 	*l = hl;
 }
 
