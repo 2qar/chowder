@@ -75,6 +75,21 @@ struct region *world_region_at(struct world *w, int x, int z) {
 	}
 }
 
+struct chunk *world_chunk_at(struct world *w, int x, int z) {
+	struct chunk *c = NULL;
+
+	int r_x = x / 512;
+	int r_z = z / 512;
+	struct region *r = world_region_at(w, r_x, r_z);
+	if (r != NULL) {
+		int c_x = (x % 512) / 16;
+		int c_z = (z % 512) / 16;
+		c = r->chunks[c_z][c_x];
+	}
+
+	return c;
+}
+
 void world_remove_region(struct world *w, struct region *r) {
 	struct node *list = find_region_sublist(w, r);
 	if (list != NULL) {

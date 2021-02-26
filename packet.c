@@ -92,6 +92,16 @@ void read_long(struct recv_packet *p, uint64_t *l) {
 	*l = hl;
 }
 
+/* TODO: test w/ negative values if i ever get around to sending chunks w/
+ *       negative coordinates xd */
+void read_position(struct recv_packet *p, int32_t *x, int16_t *y, int32_t *z) {
+	uint64_t l;
+	read_long(p, &l);
+	*x = l >> 38;
+	*y = l & 0xFFF;
+	*z = (l << 26 >> 38);
+}
+
 void make_packet(struct send_packet *p, int id) {
 	p->_packet_len = 0;
 	p->_packet_id = id;

@@ -9,6 +9,7 @@
 
 #include "protocol.h"
 #include "region.h"
+#include "world.h"
 #include "nbt.h"
 
 int handshake(int sfd) {
@@ -411,5 +412,62 @@ int keep_alive_serverbound(struct recv_packet *p, uint64_t id) {
 		fprintf(stderr, "keep alive ID mismatch\n");
 		return -1;
 	}
+	return 0;
+}
+
+int player_block_placement(struct recv_packet *p, struct world *w) {
+	int hand;
+	if (read_varint(p, &hand) < 0)
+		return -1;
+	else if (hand < 0 || hand > 1)
+		return -1;
+
+	int32_t x, z;
+	int16_t y;
+	read_position(p, &x, &y, &z);
+
+	int face;
+	if (read_varint(p, &face) < 0)
+		return -1;
+
+	switch (face) {
+		case 0:
+			--y;
+			break;
+		case 1:
+			++y;
+			break;
+		case 2:
+			--z;
+			break;
+		case 3:
+			++z;
+			break;
+		case 4:
+			--x;
+			break;
+		case 5:
+			++x;
+			break;
+		default:
+			return -1;
+	}
+	printf("INFO: read pos (%d,%d,%d)\n", x, y, z);
+
+	/* TODO: implement read_float() for cursor pos x,y,z */
+	p->_index += 12;
+
+	// head_in_block bool
+	read_byte(p);
+
+	struct chunk *c = world_chunk_at(w, x, z);
+	int i = (y / 16) + 1;
+	if (i < c->sections_len && c->sections[i]->bits_per_block > 0) {
+		printf("INFO: writing blockstate to (%d,%d,%d)\n", x, y, z);
+		/* TODO: track what the player is holding and write that block
+		 *       instead of some random block from the palette */
+		write_blockstate_at(c->sections[i], x, y, z, c->sections[i]->palette_len - 1);
+	}
+
 	return 0;
 }

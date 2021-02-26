@@ -22,6 +22,13 @@ enum tag {
 	TAG_Long_Array
 };
 
+/* TODO: read it into a tree, please god
+ * updating the """private""" _index after every search
+ * is annoying and stupid and it should just be a tree
+ * because it's structured like one, stop acting like
+ * allocating a little more memory for my sanity is gonna
+ * chew ram when it won't and the world will be better for it
+ */
 struct nbt {
 	uint16_t data_len;
 	uint8_t *data;

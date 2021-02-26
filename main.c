@@ -286,6 +286,9 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, const uint8_
 						break;
 					last_client_response = time(NULL);
 					break;
+				case 0x2C:
+					player_block_placement(&p, w);
+					break;
 				default:
 					//printf("unimplemented packet 0x%02x\n", p.packet_id);
 					break;

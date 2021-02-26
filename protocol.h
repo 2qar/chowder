@@ -6,6 +6,7 @@
 #include "conn.h"
 #include "packet.h"
 #include "region.h"
+#include "world.h"
 
 int handshake(int);
 int server_list_ping(int);
@@ -26,3 +27,4 @@ int player_position_look(struct conn *, int *teleport_id);
 int teleport_confirm(struct recv_packet *, int server_teleport_id);
 int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id);
 int keep_alive_serverbound(struct recv_packet *p, uint64_t id);
+int player_block_placement(struct recv_packet *, struct world *);
