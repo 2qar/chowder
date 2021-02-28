@@ -198,7 +198,7 @@ ssize_t nbt_unpack_node(struct nbt *root, size_t i, size_t len, const uint8_t *d
 	if (!valid_nbt) {
 		return -1;
 	}
-	return i;
+	return i + 1;
 }
 
 struct nbt *nbt_unpack(size_t len, const uint8_t *data) {
