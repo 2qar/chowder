@@ -145,6 +145,7 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 			break;
 		case TAG_Byte_Array:
 			nbt->data.array = malloc(sizeof(struct nbt_array));
+			nbt->data.array->type = TAG_Byte_Array;
 			n = nbt_read_array(nbt->data.array, 1, len - i, data + i);
 			break;
 		case TAG_String:
@@ -171,10 +172,12 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 			break;
 		case TAG_Int_Array:
 			nbt->data.array = malloc(sizeof(struct nbt_array));
+			nbt->data.array->type = TAG_Int_Array;
 			n = nbt_read_array(nbt->data.array, 4, len - i, data + i);
 			break;
 		case TAG_Long_Array:
 			nbt->data.array = malloc(sizeof(struct nbt_array));
+			nbt->data.array->type = TAG_Long_Array;
 			n = nbt_read_array(nbt->data.array, 8, len - i, data + i);
 			break;
 		default:
