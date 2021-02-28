@@ -66,17 +66,20 @@ size_t nbt_read_string(char **name, size_t len, const uint8_t *data) {
 
 int nbt_unpack_node_data(struct nbt *, size_t, size_t, const uint8_t *);
 
-int nbt_read_list(struct nbt_list *l, size_t i, size_t len, const uint8_t *data) {
-	enum tag list_type = data[i];
+int nbt_read_list(struct nbt_list *l, size_t len, const uint8_t *data) {
+	l->type = data[0];
 	int32_t list_len;
+	size_t i = 1;
 	int n = nbt_read_int(&list_len, i, len, data);
-	++i;
+	if (n > 0) {
+		i += n;
+	}
 
 	l->head = list_new();
 	int16_t elem = 0;
 	while (n > 0 && elem < list_len) {
 		struct nbt *nbt = malloc(sizeof(struct nbt));
-		nbt->tag = list_type;
+		nbt->tag = l->type;
 		nbt->name = NULL;
 
 		int n = nbt_unpack_node_data(nbt, i, len, data);
@@ -144,7 +147,7 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 			break;
 		case TAG_List:
 			nbt->data.list = malloc(sizeof(struct nbt_list));
-			n = nbt_read_list(nbt->data.list, i, len, data);
+			n = nbt_read_list(nbt->data.list, len - i, data + i);
 			break;
 		/* FIXME: some nodes are getting skipped, seems to happen when
 		 *        nested TAG_Compounds are being read
