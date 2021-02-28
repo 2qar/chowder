@@ -155,9 +155,6 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 			nbt->data.list = malloc(sizeof(struct nbt_list));
 			n = nbt_read_list(nbt->data.list, len - i, data + i);
 			break;
-		/* FIXME: some nodes are getting skipped, seems to happen when
-		 *        nested TAG_Compounds are being read
-		 */
 		case TAG_Compound:
 			if (i < len) {
 				/* FIXME: this isn't very clear, and also
