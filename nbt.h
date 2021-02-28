@@ -1,10 +1,12 @@
 /* Defines a struct for working with the NBT format.
  * Specification from https://wiki.vg/NBT#Specification.
  */
-#include <stdint.h>
+#ifndef CHOWDER_NBT_H
+#define CHOWDER_NBT_H
 
-#ifndef DEFAULT_NBT_LEN
-#define DEFAULT_NBT_LEN 1024
+#include <stdint.h>
+#include "include/linked_list.h"
+
 
 enum tag {
 	TAG_End,
@@ -22,32 +24,47 @@ enum tag {
 	TAG_Long_Array
 };
 
-/* TODO: read it into a tree, please god
- * updating the """private""" _index after every search
- * is annoying and stupid and it should just be a tree
- * because it's structured like one, stop acting like
- * allocating a little more memory for my sanity is gonna
- * chew ram when it won't and the world will be better for it
- */
-struct nbt {
-	uint16_t data_len;
-	uint8_t *data;
-	uint16_t _index;
+union nbt_data {
+	int8_t t_byte;
+	int16_t t_short;
+	int32_t t_int;
+	int64_t t_long;
+	float t_float;
+	double t_double;
+	char *string;
+	struct nbt_array *array;
+	struct nbt_list *list;
+	struct node *children;
 };
 
-void nbt_init(struct nbt *);
-void nbt_write_init(struct nbt *, const char *name);
-void nbt_finish(struct nbt *);
-void nbt_write_long_array(struct nbt *, const char *name, int32_t len, int64_t[]);
-int8_t nbt_read_byte(struct nbt *n);
-void nbt_skip_tag_name(struct nbt *n);
-int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s);
-int32_t nbt_read_int(struct nbt *n);
-uint16_t nbt_read_string(struct nbt *n, uint16_t buf_len, char *buf);
-int nbt_tag_seek(struct nbt *, enum tag, const char *name);
-int nbt_compound_seek_tag(struct nbt *, enum tag, const char *name);
-int nbt_compound_seek_end(struct nbt *);
-int nbt_list_len(struct nbt *);
-int nbt_array_len(struct nbt *);
+struct nbt {
+	enum tag tag;
+	char *name;
+	union nbt_data data;
+};
+
+struct nbt_array {
+	enum tag type;
+	int32_t len;
+	union {
+		int8_t *bytes;
+		int32_t *ints;
+		int64_t *longs;
+	} data;
+};
+
+struct nbt_list {
+	enum tag type;
+	struct node *head;
+};
+
+struct nbt *nbt_new(char *root_name);
+struct nbt *nbt_unpack(size_t len, const uint8_t *b);
+size_t nbt_pack(struct nbt *, uint8_t **b);
+
+/* returns direct children only */
+struct nbt *nbt_get(struct nbt *, enum tag, char *name);
+/* searches the whole tree */
+struct nbt *nbt_find(struct nbt *, enum tag, char *name);
 
 #endif

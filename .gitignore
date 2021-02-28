@@ -2,4 +2,5 @@ chowder
 *.o
 tests/tests
 levels
-cv
+utils/cv/cv
+utils/nbtv/nbtv

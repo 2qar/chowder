@@ -1,258 +1,224 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <arpa/inet.h>
+#include <endian.h>
+#include "include/linked_list.h"
 
 #include "nbt.h"
 
-void nbt_write_byte(struct nbt *n, uint8_t byte) {
-	/* FIXME: verify n->_index < MAX_NBT_LEN */
-	n->data[n->_index++] = byte;
+struct nbt *nbt_new(char *root_name) {
+	struct nbt *root = malloc(sizeof(struct nbt));
+	root->tag = TAG_Compound;
+	root->name = root_name;
+	return root;
 }
 
-void nbt_write_short_tagless(struct nbt *n, int16_t s) {
-	uint16_t ns = htons(s);
-	/*
-	nbt_write_byte(n, ns >> 8);
-	nbt_write_byte(n, ns & 0xff);
-	*/
-	memcpy(n->data + n->_index, &ns, 2);
-	n->_index += 2;
-}
-
-void nbt_write_cstring(struct nbt *n, const char *s) {
-	size_t s_len = strlen(s);
-	/* FIXME: this probably breaks if s is too long */
-	nbt_write_short_tagless(n, (int16_t) s_len);
-	if (s_len > 0) {
-		memcpy(n->data + n->_index, s, s_len);
-		n->_index += s_len;
-	}
-}
-
-void nbt_write_tag(struct nbt *n, enum tag t, const char *name) {
-	nbt_write_byte(n, t);
-	nbt_write_cstring(n, name);
-}
-
-void nbt_init(struct nbt *n) {
-	n->_index = 0;
-	if (n->data == NULL)
-		n->data = malloc(DEFAULT_NBT_LEN);
-}
-
-void nbt_write_init(struct nbt *n, const char *name) {
-	nbt_init(n);
-	nbt_write_tag(n, TAG_Compound, name);
-}
-
-void nbt_finish(struct nbt *n) {
-	nbt_write_byte(n, TAG_End);
-}
-
-void nbt_write_int_tagless(struct nbt *n, int32_t i) {
-	uint32_t ni = htonl(i);
-	memcpy(n->data + n->_index, &ni, 4);
-	n->_index += 4;
-}
-
-void nbt_write_long(struct nbt *n, int64_t l) {
-	/* FIXME: hacky, only works on little-endian */
-	uint8_t *nl = (uint8_t *) &l;
-	for (int i = sizeof(long)-1; i >= 0; --i)
-		nbt_write_byte(n, nl[i]);
-}
-
-void nbt_write_long_array(struct nbt *n, const char *name, int32_t len, int64_t l[]) {
-	nbt_write_tag(n, TAG_Long_Array, name);
-	nbt_write_int_tagless(n, len);
-	for (int i = 0; i < len; ++i)
-		nbt_write_long(n, l[i]);
-}
-
-uint8_t nbt_read_byte_tagless(struct nbt *n) {
-	/* TODO: bounds-checking */
-	return n->data[n->_index++];
-}
-
-int8_t nbt_read_byte(struct nbt *n) {
-	nbt_skip_tag_name(n);
-	return nbt_read_byte_tagless(n);
-}
-
-int16_t nbt_read_short(struct nbt *n) {
-	int16_t i = nbt_read_byte_tagless(n) << 8;
-	i += nbt_read_byte_tagless(n);
-	return i;
-}
-
-void nbt_skip_tag_name(struct nbt *n) {
-	nbt_read_byte_tagless(n);
-	int16_t name_len = nbt_read_short(n);
-	n->_index += name_len;
-}
-
-uint16_t nbt_read_string(struct nbt *n, uint16_t buf_len, char *buf) {
-	nbt_skip_tag_name(n);
-	uint16_t len = nbt_read_short(n);
-	uint16_t i;
-	for (i = 0; i < len; ++i)
-		if (i < buf_len)
-			buf[i] = nbt_read_byte_tagless(n);
-		else
-			nbt_read_byte_tagless(n);
-	if (i > buf_len - 1)
-		i = buf_len - 1;
-	buf[i] = 0;
-	return i + 1;
-}
-
-/* read a tag's name, assuming n->index has skipped the tag's type
- * and is already at the tag name's length */
-int nbt_read_tag_name_tagless(struct nbt *n, uint16_t buf_len, char *s) {
-	int16_t len = nbt_read_short(n);
-	if (!len)
-		return -1;
-	uint16_t read = 0;
-	for (int16_t i = 0; i < len; ++i) {
-		if (i < buf_len-1) {
-			s[i] = nbt_read_byte_tagless(n);
-			++read;
-		}
-		else {
-			nbt_read_byte_tagless(n);
-		}
-	}
-	s[read] = 0;
-	return read;
-}
-
-int nbt_read_tag_name(struct nbt *n, uint16_t buf_len, char *s) {
-	/* skip the tag's name */
-	nbt_read_byte_tagless(n);
-	return nbt_read_tag_name_tagless(n, buf_len, s);
-}
-
-int32_t nbt_read_int_tagless(struct nbt *n) {
-	int32_t v = 0;
-	for (int i = 3; i >= 0; --i)
-		v += nbt_read_byte_tagless(n) << (8 * i);
-	return v;
-}
-
-int nbt_tag_len(struct nbt *n, enum tag t) {
-	switch (t) {
-		case TAG_Byte:
-			return 1;
-		case TAG_Short:
-			return 2;
-		case TAG_Int:
-			return 4;
-		case TAG_Long:
-			return 8;
-		case TAG_Float:
-			return 4;
-		case TAG_Double:
-			return 8;
-		case TAG_Byte_Array:
-			return nbt_read_int_tagless(n);
-		case TAG_String:
-			return nbt_read_short(n);
-		case TAG_Int_Array:
-			return nbt_read_int_tagless(n) * 4;
-		case TAG_Long_Array:
-			return nbt_read_int_tagless(n) * 8;
-		default:
-			return 0;
-	}
-}
-
-int nbt_tag_seek_iter(struct nbt *n, enum tag t, const char *name, uint8_t compound_level) {
-	char buf[32] = {0};
-	do {
-		uint16_t tag_start = n->_index;
-		enum tag current_tag = nbt_read_byte_tagless(n);
-		if (current_tag != TAG_End) {
-			int len = nbt_read_tag_name_tagless(n, 32, buf);
-			if (t == current_tag && !strncmp(buf, name, len)) {
-				n->_index = tag_start;
-				return tag_start;
-			}
-		}
-
-		/* no match, skip this tag */
-		switch (current_tag) {
-			case TAG_End:
-				--compound_level;
-				break;
-			case TAG_List:
-				;
-				enum tag tag = nbt_read_byte_tagless(n);
-				uint8_t list_len = nbt_read_int_tagless(n);
-				if (tag == TAG_Compound) {
-					if (t == TAG_End) {
-						for (uint8_t i = 0; i < list_len; ++i)
-							/* seek for a tag that doesn't exist,
-							 * skipping to the end */
-							nbt_tag_seek_iter(n, -1, "", 1);
-					} else {
-						for (uint8_t i = 0; i < list_len; ++i) {
-							int index = nbt_tag_seek_iter(n, t, name, 1);
-							if (index != -1)
-								return index;
-						}
-					}
-				} else if (tag != TAG_End) {
-					n->_index += list_len * nbt_tag_len(n, tag);
-				}
-				break;
-			case TAG_Compound:
-				++compound_level;
-				break;
-			default:
-				n->_index += nbt_tag_len(n, current_tag);
-				break;
-		}
-	} while (compound_level > 0);
-
-	if (t == TAG_End) {
-		return n->_index;
+int nbt_read_bytes(size_t n, void *dest, size_t i, size_t len, const uint8_t *data) {
+	if (i < len - n) {
+		memcpy(dest, data + i, n);
+		return n;
 	}
 	return -1;
 }
 
-int nbt_tag_seek(struct nbt *n, enum tag t, const char *name) {
-	return nbt_tag_seek_iter(n, t, name, 0);
+int nbt_read_short(int16_t *v, size_t i, size_t len, const uint8_t *data) {
+	int n = nbt_read_bytes(2, v, i, len, data);
+	if (n > 0) {
+		*v = ntohs(*v);
+	}
+	return n;
 }
 
-/* seek tags inside a list of compound tags */
-int nbt_compound_seek_tag(struct nbt *n, enum tag t, const char *name) {
-	return nbt_tag_seek_iter(n, t, name, 1);
+int nbt_read_int(int32_t *v, size_t i, size_t len, const uint8_t *data) {
+	int n = nbt_read_bytes(4, v, i, len, data);
+	if (n > 0) {
+		*v = ntohl(*v);
+	}
+	return n;
 }
 
-/* maybe "seek_end" is a bad name for it because it skips to the start of the next compound
- * in the list */
-int nbt_compound_seek_end(struct nbt *n) {
-	return nbt_tag_seek_iter(n, TAG_End, "", 1);
+int nbt_read_long(int64_t *v, size_t i, size_t len, const uint8_t *data) {
+	int n = nbt_read_bytes(8, v, i, len, data);
+	if (n > 0) {
+		*v = be64toh(*v);
+	}
+	return n;
 }
 
-/* read a TAG_List's length, setting n's index to the first element in the process */
-int nbt_list_len(struct nbt *n) {
-	assert(nbt_read_byte_tagless(n) == TAG_List);
-	n->_index += nbt_read_short(n);
-	/* ignore the tag type, right now these parsing functions are only for
-	 * parsing chunks, so all of the types are known beforehand */
-	nbt_read_byte_tagless(n);
-	return nbt_read_int_tagless(n);
+size_t nbt_read_string(char **name, size_t len, const uint8_t *data) {
+	size_t i = 0;
+
+	uint16_t name_len;
+	int n = nbt_read_short((int16_t *) &name_len, i, len, data);
+	if (n > 0) {
+		i += n;
+		*name = malloc(sizeof(char) * (name_len + 1));
+		n = nbt_read_bytes(name_len, *name, i, len, data);
+		if (n > 0) {
+			i += n;
+			(*name)[n] = '\0';
+		}
+	}
+	return i;
 }
 
-/* like nbt_list_len() but for arrays */
-int nbt_array_len(struct nbt *n) {
-	enum tag t = nbt_read_byte_tagless(n);
-	assert(t == TAG_Byte_Array || t == TAG_Int_Array || t == TAG_Long_Array);
+int nbt_unpack_node_data(struct nbt *, size_t, size_t, const uint8_t *);
 
-	int16_t name_len = nbt_read_short(n);
-	n->_index += name_len;
+int nbt_read_list(struct nbt_list *l, size_t i, size_t len, const uint8_t *data) {
+	enum tag list_type = data[i];
+	int32_t list_len;
+	int n = nbt_read_int(&list_len, i, len, data);
+	++i;
 
-	return nbt_read_int_tagless(n);
+	l->head = list_new();
+	int16_t elem = 0;
+	while (n > 0 && elem < list_len) {
+		struct nbt *nbt = malloc(sizeof(struct nbt));
+		nbt->tag = list_type;
+		nbt->name = NULL;
+
+		int n = nbt_unpack_node_data(nbt, i, len, data);
+		if (n > 0) {
+			i += n;
+		}
+
+		++elem;
+		list_append(l->head, sizeof(struct nbt *), &nbt);
+	}
+
+	if (n <= 0) {
+		return -1;
+	}
+	return i;
 }
+
+int nbt_read_array(struct nbt_array *a, size_t elem_bytes, size_t i, size_t len, const uint8_t *data) {
+	int n = nbt_read_int(&(a->len), i, len, data);
+	if (n > 0) {
+		i += n;
+		if (i < len - a->len * elem_bytes) {
+			memcpy(a->data.bytes, data + i, a->len * elem_bytes);
+		} else {
+			n = -1;
+		}
+	}
+	return n;
+}
+
+ssize_t nbt_unpack_node(struct nbt *, size_t, size_t, const uint8_t *);
+
+int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *data) {
+	int n = 0;
+	switch (nbt->tag) {
+		case TAG_Byte:
+			if (i < len) {
+				nbt->data.t_byte = data[i];
+				n = 1;
+			} else {
+				n = -1;
+			}
+			break;
+		case TAG_Short:
+			n = nbt_read_short(&(nbt->data.t_short), i, len, data);
+			break;
+		case TAG_Int:
+			n = nbt_read_int(&(nbt->data.t_int), i, len, data);
+			break;
+		case TAG_Long:
+			n = nbt_read_long(&(nbt->data.t_long), i, len, data);
+			break;
+		case TAG_Float:
+			n = nbt_read_int((int32_t *) &(nbt->data.t_float), i, len, data);
+			break;
+		case TAG_Double:
+			n = nbt_read_long((int64_t *) &(nbt->data.t_double), i, len, data);
+			break;
+		case TAG_Byte_Array:
+			nbt->data.array = malloc(sizeof(struct nbt_array));
+			n = nbt_read_array(nbt->data.array, 1, i, len, data);
+			break;
+		case TAG_String:
+			n = nbt_read_string(&(nbt->data.string), len - i, data + i);
+			break;
+		case TAG_List:
+			nbt->data.list = malloc(sizeof(struct nbt_list));
+			n = nbt_read_list(nbt->data.list, i, len, data);
+			break;
+		/* FIXME: some nodes are getting skipped, seems to happen when
+		 *        nested TAG_Compounds are being read
+		 */
+		case TAG_Compound:
+			if (i < len) {
+				/* FIXME: this isn't very clear, and also
+				 *        might be part of the reason why parsing
+				 *        kinda breaks on compound nodes right now
+				 *        but idk
+				 */
+				n = nbt_unpack_node(nbt, i, len, data) - i;
+			} else {
+				n = -1;
+			}
+			break;
+		case TAG_Int_Array:
+			nbt->data.array = malloc(sizeof(struct nbt_array));
+			n = nbt_read_array(nbt->data.array, 4, i, len, data);
+			break;
+		case TAG_Long_Array:
+			nbt->data.array = malloc(sizeof(struct nbt_array));
+			n = nbt_read_array(nbt->data.array, 8, i, len, data);
+			break;
+		default:
+			n = -2;
+			break;
+	}
+	return n;
+}
+
+ssize_t nbt_unpack_node(struct nbt *root, size_t i, size_t len, const uint8_t *data) {
+	root->data.children = list_new();
+	bool valid_nbt = true;
+	while (valid_nbt && i < len && data[i] != TAG_End) {
+		struct nbt *child = malloc(sizeof(struct nbt));
+		child->tag = data[i];
+		++i;
+		i += nbt_read_string(&(child->name), len - i, data + i);
+
+		int n = nbt_unpack_node_data(child, i, len, data);
+		valid_nbt = n > 0;
+		i += n;
+
+		list_append(root->data.children, sizeof(struct node *), &child);
+	}
+
+	if (!valid_nbt) {
+		return -1;
+	}
+	return i;
+}
+
+struct nbt *nbt_unpack(size_t len, const uint8_t *data) {
+	size_t i = 0;
+	char *root_name = NULL;
+	if (data[i] == TAG_Compound) {
+		++i;
+		i += nbt_read_string(&root_name, len - i, data + i);
+	}
+	struct nbt *root = nbt_new(root_name);
+	if (nbt_unpack_node(root, i, len, data) < 0) {
+		/* TODO free tree */
+		return NULL;
+	}
+	return root;
+}
+
+/* TODO: Before implementing this, make a function nbt_traverse() that
+ *       walks through the tree and returns the total size it would be
+ *       in bytes so a proper buffer can be allocated.
+ *
+ *       If the buffer length is guaranteed to be big enough and the
+ *       write functions behave correctly, they shouldn't have to constantly
+ *       checking for overflow like the nbt_read_* functions.
+ */
+size_t nbt_pack(struct nbt *root, uint8_t **data);
