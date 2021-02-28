@@ -97,17 +97,22 @@ int nbt_read_list(struct nbt_list *l, size_t len, const uint8_t *data) {
 	return i;
 }
 
-int nbt_read_array(struct nbt_array *a, size_t elem_bytes, size_t i, size_t len, const uint8_t *data) {
+int nbt_read_array(struct nbt_array *a, size_t elem_bytes, size_t len, const uint8_t *data) {
+	size_t i = 0;
 	int n = nbt_read_int(&(a->len), i, len, data);
 	if (n > 0) {
 		i += n;
 		if (i < len - a->len * elem_bytes) {
+			a->data.bytes = malloc(a->len * elem_bytes);
 			memcpy(a->data.bytes, data + i, a->len * elem_bytes);
+			i += a->len * elem_bytes;
 		} else {
-			n = -1;
+			return -1;
 		}
+	} else {
+		return -1;
 	}
-	return n;
+	return i;
 }
 
 ssize_t nbt_unpack_node(struct nbt *, size_t, size_t, const uint8_t *);
@@ -140,7 +145,7 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 			break;
 		case TAG_Byte_Array:
 			nbt->data.array = malloc(sizeof(struct nbt_array));
-			n = nbt_read_array(nbt->data.array, 1, i, len, data);
+			n = nbt_read_array(nbt->data.array, 1, len - i, data + i);
 			break;
 		case TAG_String:
 			n = nbt_read_string(&(nbt->data.string), len - i, data + i);
@@ -166,11 +171,11 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 			break;
 		case TAG_Int_Array:
 			nbt->data.array = malloc(sizeof(struct nbt_array));
-			n = nbt_read_array(nbt->data.array, 4, i, len, data);
+			n = nbt_read_array(nbt->data.array, 4, len - i, data + i);
 			break;
 		case TAG_Long_Array:
 			nbt->data.array = malloc(sizeof(struct nbt_array));
-			n = nbt_read_array(nbt->data.array, 8, i, len, data);
+			n = nbt_read_array(nbt->data.array, 8, len - i, data + i);
 			break;
 		default:
 			n = -2;
