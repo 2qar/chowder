@@ -168,6 +168,10 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 			}
 			break;
 		case TAG_Int_Array:
+			/* FIXME: here and in TAG_Long_Array, switch endianness
+			 *        for each of the elements from network to host
+			 *        order
+			 */
 			nbt->data.array = malloc(sizeof(struct nbt_array));
 			nbt->data.array->type = TAG_Int_Array;
 			n = nbt_read_array(nbt->data.array, 4, len - i, data + i);
@@ -290,4 +294,144 @@ size_t nbt_len(struct nbt *root) {
 	return len + nbt_node_len(root);
 }
 
-size_t nbt_pack(struct nbt *root, uint8_t **data);
+size_t nbt_write_short(int16_t s, uint8_t *data) {
+	s = htons(s);
+	memcpy(data, &s, sizeof(int16_t));
+	return sizeof(int16_t);
+}
+
+size_t nbt_write_int(int32_t i, uint8_t *data) {
+	i = htonl(i);
+	memcpy(data, &i, sizeof(int32_t));
+	return sizeof(int32_t);
+}
+
+size_t nbt_write_long(int64_t l, uint8_t *data) {
+	l = htobe64(l);
+	memcpy(data, &l, sizeof(int64_t));
+	return sizeof(int64_t);
+}
+
+size_t nbt_write_string(const char *s, uint8_t *data) {
+	size_t len = 0;
+	size_t s_len = strlen(s);
+	len += nbt_write_short(s_len, data);
+	data += len;
+
+	while (*s != '\0') {
+		*data = *s;
+		++data;
+		++s;
+		++len;
+	}
+	return len;
+}
+
+
+size_t nbt_write_byte_array(struct nbt_array *a, uint8_t *data) {
+	size_t len = nbt_write_int(a->len, data);
+	for (int32_t i = 0; i < a->len; ++i) {
+		data[len] = a->data.bytes[i];
+		++len;
+	}
+	return len;
+}
+
+size_t nbt_pack_node_data(struct nbt *, uint8_t *);
+
+size_t nbt_write_list(struct nbt_list *list, uint8_t *data) {
+	size_t len = 0;
+	data[0] = list->type;
+	++len;
+	len += nbt_write_int(list_len(list->head), data + 1);
+
+	struct node *l = list->head;
+	while (!list_empty(l)) {
+		len += nbt_pack_node_data(list_item(l), data + len);
+		l = list_next(l);
+	}
+	return len;
+}
+
+size_t nbt_write_int_array(struct nbt_array *a, uint8_t *data) {
+	size_t len = nbt_write_int(a->len, data);
+	for (int32_t i = 0; i < a->len; ++i) {
+		len += nbt_write_int(a->data.ints[i], data + len);
+	}
+	return len;
+}
+
+size_t nbt_write_long_array(struct nbt_array *a, uint8_t *data) {
+	size_t len = nbt_write_int(a->len, data);
+	for (int32_t i = 0; i < a->len; ++i) {
+		len += nbt_write_long(a->data.longs[i], data + len);
+	}
+	return len;
+}
+
+size_t nbt_pack_node(struct nbt *, uint8_t *);
+
+size_t nbt_pack_node_data(struct nbt *n, uint8_t *data) {
+	switch (n->tag) {
+		case TAG_Byte:
+			*data = n->data.t_byte;
+			return 1;
+		case TAG_Short:
+			return nbt_write_short(n->data.t_short, data);
+		case TAG_Int:
+			return nbt_write_int(n->data.t_int, data);
+		case TAG_Long:
+			return nbt_write_long(n->data.t_long, data);
+		/* FIXME: floats and doubles aren't being written properly */
+		case TAG_Float:
+			return nbt_write_int((int32_t) n->data.t_float, data);
+		case TAG_Double:
+			return nbt_write_long((int64_t) n->data.t_double, data);
+		case TAG_Byte_Array:
+			return nbt_write_byte_array(n->data.array, data);
+		case TAG_String:
+			return nbt_write_string(n->data.string, data);
+		case TAG_List:
+			return nbt_write_list(n->data.list, data);
+		case TAG_Compound:
+			return nbt_pack_node(n, data);
+		case TAG_Int_Array:
+			return nbt_write_int_array(n->data.array, data);
+		case TAG_Long_Array:
+			return nbt_write_long_array(n->data.array, data);
+		default:
+			return 0;
+	}
+}
+
+size_t nbt_pack_node(struct nbt *n, uint8_t *data) {
+	size_t len = 0;
+
+	struct node *l = n->data.children;
+	while (!list_empty(l)) {
+		struct nbt *child = list_item(l);
+		data[len] = child->tag;
+		++len;
+		len += nbt_write_string(child->name, data + len);
+		len += nbt_pack_node_data(child, data + len);
+
+		l = list_next(l);
+	}
+
+	data[len] = TAG_End;
+	return len + 1;
+}
+
+size_t nbt_pack(struct nbt *root, uint8_t **data) {
+	size_t buf_len = nbt_len(root);
+	*data = malloc(buf_len);
+
+	size_t len = 0;
+	(*data)[0] = TAG_Compound;
+	++len;
+	len += nbt_write_string(root->name, (*data) + len);
+	len += nbt_pack_node(root, (*data) + len);
+
+	assert(len == buf_len);
+	return buf_len;
+}

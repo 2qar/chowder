@@ -89,11 +89,30 @@ void print_tree(struct nbt *root)
 	print_tree_rec(root, 0);
 }
 
+size_t write_tree(struct nbt *root, char *filename)
+{
+	uint8_t *data = NULL;
+	size_t len = nbt_pack(root, &data);
+	FILE *f = fopen(filename, "w");
+	if (f == NULL) {
+		perror("nbtv: fopen: ");
+		exit(EXIT_FAILURE);
+	}
+	size_t n = fwrite(data, 1, len, f);
+	fclose(f);
+	return n;
+}
+
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
 		fprintf(stderr, "usage: nbtv [FILE]\n");
 		exit(EXIT_FAILURE);
+	}
+
+	char *save_filename = NULL;
+	if (argc == 3) {
+		save_filename = argv[2];
 	}
 
 	FILE *f = fopen(argv[1], "r");
@@ -114,6 +133,9 @@ int main(int argc, char **argv)
 	if (root == NULL) {
 		fprintf(stderr, "nbtv: invalid NBT\n");
 		exit(EXIT_FAILURE);
+	} else if (save_filename != NULL) {
+		size_t n = write_tree(root, save_filename);
+		printf("wrote %ld bytes to '%s'\n", n, save_filename);
 	} else {
 		print_tree(root);
 	}
