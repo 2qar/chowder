@@ -221,12 +221,73 @@ struct nbt *nbt_unpack(size_t len, const uint8_t *data) {
 	return root;
 }
 
-/* TODO: Before implementing this, make a function nbt_traverse() that
- *       walks through the tree and returns the total size it would be
- *       in bytes so a proper buffer can be allocated.
- *
- *       If the buffer length is guaranteed to be big enough and the
- *       write functions behave correctly, they shouldn't have to constantly
- *       checking for overflow like the nbt_read_* functions.
- */
+size_t nbt_data_len(struct nbt *);
+
+size_t nbt_list_len(struct nbt_list *list) {
+	size_t len = 5;
+	struct node *l = list->head;
+	while (!list_empty(l)) {
+		len += nbt_data_len(list_item(l));
+		l = list_next(l);
+	}
+	return len;
+}
+
+size_t nbt_node_len(struct nbt *);
+
+size_t nbt_data_len(struct nbt *node) {
+	switch (node->tag) {
+		case TAG_End:
+			return 0;
+		case TAG_Byte:
+			return 1;
+		case TAG_Short:
+			return 2;
+		case TAG_Int:
+			return 4;
+		case TAG_Long:
+			return 8;
+		case TAG_Float:
+			return 4;
+		case TAG_Double:
+			return 8;
+		case TAG_Byte_Array:
+			return 4 + node->data.array->len;
+		case TAG_String:
+			return 2 + strlen(node->data.string);
+		case TAG_List:
+			return nbt_list_len(node->data.list);
+		case TAG_Compound:
+			return nbt_node_len(node);
+		case TAG_Int_Array:
+			return 4 + node->data.array->len * 4;
+		case TAG_Long_Array:
+			return 4 + node->data.array->len * 8;
+	}
+	return 0;
+}
+
+size_t nbt_node_len(struct nbt *n) {
+	size_t len = 0;
+
+	struct node *l = n->data.children;
+	while (!list_empty(l)) {
+		struct nbt *child = list_item(l);
+		len += 3 + strlen(child->name);
+		len += nbt_data_len(child);
+		l = list_next(l);
+	}
+
+	return len + 1;
+}
+
+size_t nbt_len(struct nbt *root) {
+	size_t len = 3;
+	if (root->name != NULL) {
+		len += strlen(root->name);
+	}
+
+	return len + nbt_node_len(root);
+}
+
 size_t nbt_pack(struct nbt *root, uint8_t **data);
