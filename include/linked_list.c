@@ -77,4 +77,5 @@ void list_free(struct node *list) {
 	while (!list_empty(list)) {
 		free(list_remove(list));
 	}
+	free(list);
 }
