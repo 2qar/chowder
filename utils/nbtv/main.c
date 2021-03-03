@@ -17,7 +17,29 @@ void put_indent(int level)
 	}
 }
 
-void print_node_data(struct nbt *node)
+void print_array(struct nbt_array *a, int indent)
+{
+	printf("%d entries\n", a->len);
+	for (int32_t i = 0; i < a->len; ++i) {
+		put_indent(indent + 1);
+		printf("%d: ", i);
+		switch (a->type) {
+			case TAG_Byte_Array:
+				printf("%d\n", a->data.bytes[i]);
+				break;
+			case TAG_Int_Array:
+				printf("%d\n", a->data.ints[i]);
+				break;
+			case TAG_Long_Array:
+				printf("%ld\n", a->data.longs[i]);
+				break;
+			default:
+				break;
+		}
+	}
+}
+
+void print_node_data(struct nbt *node, int indent)
 {
 	switch (node->tag) {
 		case TAG_Byte:
@@ -41,11 +63,10 @@ void print_node_data(struct nbt *node)
 		case TAG_String:
 			printf("'%s'\n", node->data.string);
 			break;
-		/* TODO: print array / list contents */
 		case TAG_Byte_Array:
 		case TAG_Int_Array:
 		case TAG_Long_Array:
-			printf("%d entries\n", node->data.array->len);
+			print_array(node->data.array, indent);
 			break;
 		case TAG_List:
 			printf("%d %s entries\n", list_len(node->data.list->head), tagNames[node->data.list->type]);
@@ -75,7 +96,7 @@ void print_tree_rec(struct nbt *root, int indent)
 				name = nbt->name;
 			}
 			printf("%s('%s'): ", tagNames[nbt->tag], name);
-			print_node_data(nbt);
+			print_node_data(nbt, indent + 1);
 		}
 		children = list_next(children);
 	}
