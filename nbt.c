@@ -54,11 +54,13 @@ size_t nbt_read_string(char **name, size_t len, const uint8_t *data) {
 	int n = nbt_read_short((int16_t *) &name_len, i, len, data);
 	if (n > 0) {
 		i += n;
-		*name = malloc(sizeof(char) * (name_len + 1));
-		n = nbt_read_bytes(name_len, *name, i, len, data);
-		if (n > 0) {
-			i += n;
-			(*name)[n] = '\0';
+		if (name_len > 0) {
+			*name = malloc(sizeof(char) * (name_len + 1));
+			n = nbt_read_bytes(name_len, *name, i, len, data);
+			if (n > 0) {
+				i += n;
+				(*name)[n] = '\0';
+			}
 		}
 	}
 	return i;
