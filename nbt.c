@@ -312,6 +312,18 @@ size_t nbt_write_long(int64_t l, uint8_t *data) {
 	return sizeof(int64_t);
 }
 
+size_t nbt_write_float(float f, uint8_t *data) {
+	int32_t i;
+	memcpy(&i, &f, 4);
+	return nbt_write_int(i, data);
+}
+
+size_t nbt_write_double(double d, uint8_t *data) {
+	int64_t l;
+	memcpy(&l, &d, 8);
+	return nbt_write_long(l, data);
+}
+
 size_t nbt_write_string(const char *s, uint8_t *data) {
 	size_t len = 0;
 	size_t s_len = strlen(s);
@@ -384,9 +396,9 @@ size_t nbt_pack_node_data(struct nbt *n, uint8_t *data) {
 			return nbt_write_long(n->data.t_long, data);
 		/* FIXME: floats and doubles aren't being written properly */
 		case TAG_Float:
-			return nbt_write_int((int32_t) n->data.t_float, data);
+			return nbt_write_float(n->data.t_float, data);
 		case TAG_Double:
-			return nbt_write_long((int64_t) n->data.t_double, data);
+			return nbt_write_double(n->data.t_double, data);
 		case TAG_Byte_Array:
 			return nbt_write_byte_array(n->data.array, data);
 		case TAG_String:
