@@ -70,7 +70,7 @@ void nbt_free(struct nbt *root) {
 }
 
 int nbt_read_bytes(size_t n, void *dest, size_t i, size_t len, const uint8_t *data) {
-	if (i < len - n) {
+	if (n < len && i < len - n) {
 		memcpy(dest, data + i, n);
 		return n;
 	}
@@ -285,7 +285,7 @@ struct nbt *nbt_unpack(size_t len, const uint8_t *data) {
 	}
 	struct nbt *root = nbt_new(root_name);
 	if (nbt_unpack_node(root, i, len, data) < 0) {
-		/* TODO free tree */
+		nbt_free(root);
 		return NULL;
 	}
 	return root;
