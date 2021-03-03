@@ -157,8 +157,10 @@ int main(int argc, char **argv)
 	} else if (save_filename != NULL) {
 		size_t n = write_tree(root, save_filename);
 		printf("wrote %ld bytes to '%s'\n", n, save_filename);
+		nbt_free(root);
 	} else {
 		print_tree(root);
+		nbt_free(root);
 	}
 
 	free(buf);

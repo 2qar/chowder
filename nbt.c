@@ -15,6 +15,60 @@ struct nbt *nbt_new(char *root_name) {
 	return root;
 }
 
+void nbt_free_node_data(struct nbt *);
+
+void nbt_free_list(struct nbt_list *l) {
+	while (!list_empty(l->head)) {
+		struct nbt *node = list_remove(l->head);
+		nbt_free_node_data(node);
+		free(node);
+	}
+	list_free(l->head);
+	free(l);
+}
+
+void nbt_free_node(struct nbt *);
+
+void nbt_free_node_data(struct nbt *node) {
+	switch (node->tag) {
+		case TAG_String:
+			free(node->data.string);
+			break;
+		case TAG_Byte_Array:
+		case TAG_Int_Array:
+		case TAG_Long_Array:
+			free(node->data.array->data.bytes);
+			free(node->data.array);
+			break;
+		case TAG_List:
+			nbt_free_list(node->data.list);
+			break;
+		case TAG_Compound:
+			nbt_free_node(node);
+			break;
+		default:
+			break;
+	}
+}
+
+void nbt_free_node(struct nbt *root) {
+	free(root->name);
+	while (!list_empty(root->data.children)) {
+		struct nbt *child = list_remove(root->data.children);
+		nbt_free_node_data(child);
+		if (child->tag != TAG_Compound) {
+			free(child->name);
+		}
+		free(child);
+	}
+	list_free(root->data.children);
+}
+
+void nbt_free(struct nbt *root) {
+	nbt_free_node(root);
+	free(root);
+}
+
 int nbt_read_bytes(size_t n, void *dest, size_t i, size_t len, const uint8_t *data) {
 	if (i < len - n) {
 		memcpy(dest, data + i, n);
