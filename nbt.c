@@ -115,6 +115,28 @@ int nbt_read_array(struct nbt_array *a, size_t elem_bytes, size_t len, const uin
 	return i;
 }
 
+int nbt_read_int_array(struct nbt_array **array, size_t len, const uint8_t *data) {
+	struct nbt_array *a = malloc(sizeof(struct nbt_array));
+	a->type = TAG_Int_Array;
+	int n = nbt_read_array(a, 4, len, data);
+	for (int32_t i = 0; i < a->len; ++i) {
+		a->data.ints[i] = ntohl(a->data.ints[i]);
+	}
+	*array = a;
+	return n;
+}
+
+int nbt_read_long_array(struct nbt_array **array, size_t len, const uint8_t *data) {
+	struct nbt_array *a = malloc(sizeof(struct nbt_array));
+	a->type = TAG_Long_Array;
+	int n = nbt_read_array(a, 8, len, data);
+	for (int32_t i = 0; i < a->len; ++i) {
+		a->data.longs[i] = be64toh(a->data.longs[i]);
+	}
+	*array = a;
+	return n;
+}
+
 ssize_t nbt_unpack_node(struct nbt *, size_t, size_t, const uint8_t *);
 
 int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *data) {
@@ -157,29 +179,17 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 			break;
 		case TAG_Compound:
 			if (i < len) {
-				/* FIXME: this isn't very clear, and also
-				 *        might be part of the reason why parsing
-				 *        kinda breaks on compound nodes right now
-				 *        but idk
-				 */
+				/* FIXME: this isn't very clear */
 				n = nbt_unpack_node(nbt, i, len, data) - i;
 			} else {
 				n = -1;
 			}
 			break;
 		case TAG_Int_Array:
-			/* FIXME: here and in TAG_Long_Array, switch endianness
-			 *        for each of the elements from network to host
-			 *        order
-			 */
-			nbt->data.array = malloc(sizeof(struct nbt_array));
-			nbt->data.array->type = TAG_Int_Array;
-			n = nbt_read_array(nbt->data.array, 4, len - i, data + i);
+			n = nbt_read_int_array(&(nbt->data.array), len - i, data + i);
 			break;
 		case TAG_Long_Array:
-			nbt->data.array = malloc(sizeof(struct nbt_array));
-			nbt->data.array->type = TAG_Long_Array;
-			n = nbt_read_array(nbt->data.array, 8, len - i, data + i);
+			n = nbt_read_long_array(&(nbt->data.array), len - i, data + i);
 			break;
 		default:
 			n = -2;
@@ -394,7 +404,6 @@ size_t nbt_pack_node_data(struct nbt *n, uint8_t *data) {
 			return nbt_write_int(n->data.t_int, data);
 		case TAG_Long:
 			return nbt_write_long(n->data.t_long, data);
-		/* FIXME: floats and doubles aren't being written properly */
 		case TAG_Float:
 			return nbt_write_float(n->data.t_float, data);
 		case TAG_Double:
