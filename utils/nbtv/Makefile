@@ -1,5 +1,5 @@
 CC=cc
-CFLAGS=-Wall -Wextra -Werror -pedantic
+CFLAGS=-g -Wall -Wextra -Werror -pedantic
 TARGET=nbtv
 
 $(TARGET):

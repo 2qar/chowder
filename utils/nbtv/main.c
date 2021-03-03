@@ -151,6 +151,7 @@ int main(int argc, char **argv)
 	fclose(f);
 
 	struct nbt *root = nbt_unpack(f_len, buf);
+	free(buf);
 	if (root == NULL) {
 		fprintf(stderr, "nbtv: invalid NBT\n");
 		exit(EXIT_FAILURE);
@@ -163,6 +164,5 @@ int main(int argc, char **argv)
 		nbt_free(root);
 	}
 
-	free(buf);
 	exit(EXIT_SUCCESS);
 }
