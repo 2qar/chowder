@@ -512,3 +512,48 @@ size_t nbt_pack(struct nbt *root, uint8_t **data) {
 	assert(len == buf_len);
 	return buf_len;
 }
+
+struct nbt *nbt_tree_search(struct nbt *, enum tag, char *, bool);
+
+struct nbt *nbt_list_search(struct nbt_list *l, enum tag t, char *name) {
+	assert(l->type == TAG_Compound);
+	struct nbt *node = NULL;
+
+	struct node *head = l->head;
+	while (!list_empty(head) && node == NULL) {
+		struct nbt *item = list_item(head);
+		node = nbt_tree_search(item, t, name, true);
+		head = list_next(head);
+	}
+
+	return node;
+}
+
+struct nbt *nbt_tree_search(struct nbt *root, enum tag t, char *name, bool recurse) {
+	struct nbt *node = NULL;
+
+	struct node *head = root->data.children;
+	while (!list_empty(head) && node == NULL) {
+		struct nbt *child = list_item(head);
+		if (child->tag == t && strcmp(child->name, name) == 0) {
+			node = child;
+		} else if (child->tag == TAG_Compound && recurse) {
+			node = nbt_tree_search(child, t, name, recurse);
+		} else if (child->tag == TAG_List
+				&& child->data.list->type == TAG_Compound
+				&& recurse) {
+			node = nbt_list_search(child->data.list, t, name);
+		}
+		head = list_next(head);
+	}
+
+	return node;
+}
+
+struct nbt *nbt_get(struct nbt *root, enum tag t, char *name) {
+	return nbt_tree_search(root, t, name, false);
+}
+
+struct nbt *nbt_find(struct nbt *root, enum tag t, char *name) {
+	return nbt_tree_search(root, t, name, true);
+}
