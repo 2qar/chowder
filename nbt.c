@@ -500,14 +500,33 @@ size_t nbt_pack_node(struct nbt *n, uint8_t *data) {
 }
 
 size_t nbt_pack(struct nbt *root, uint8_t **data) {
-	size_t buf_len = nbt_len(root);
-	*data = malloc(buf_len);
-
+	size_t buf_len;
 	size_t len = 0;
-	(*data)[0] = TAG_Compound;
-	++len;
-	len += nbt_write_string(root->name, (*data) + len);
-	len += nbt_pack_node(root, (*data) + len);
+	if (root->tag == TAG_Compound) {
+		buf_len = nbt_len(root);
+		*data = malloc(buf_len);
+
+		(*data)[0] = TAG_Compound;
+		++len;
+		len += nbt_write_string(root->name, (*data) + len);
+		len += nbt_pack_node(root, (*data) + len);
+	} else {
+		const size_t fake_root_len = 4;
+		const size_t root_header_len = 3 + strlen(root->name);
+		buf_len = fake_root_len + root_header_len + nbt_data_len(root);
+		*data = malloc(buf_len);
+
+		(*data)[len] = TAG_Compound;
+		++len;
+		len += nbt_write_short(0, (*data) + len);
+		(*data)[len] = root->tag;
+		++len;
+
+		len += nbt_write_string(root->name, (*data) + len);
+		len += nbt_pack_node_data(root, (*data) + len);
+		(*data)[len] = 0;
+		++len;
+	}
 
 	assert(len == buf_len);
 	return buf_len;

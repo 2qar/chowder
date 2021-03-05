@@ -110,7 +110,7 @@ void print_tree(struct nbt *root)
 	print_tree_rec(root, 0);
 }
 
-size_t write_tree(struct nbt *root, char *filename)
+void write_tree(struct nbt *root, char *filename)
 {
 	uint8_t *data = NULL;
 	size_t len = nbt_pack(root, &data);
@@ -120,8 +120,23 @@ size_t write_tree(struct nbt *root, char *filename)
 		exit(EXIT_FAILURE);
 	}
 	size_t n = fwrite(data, 1, len, f);
+	printf("wrote %ld bytes to '%s'\n", n, filename);
 	fclose(f);
-	return n;
+	free(data);
+}
+
+enum tag tag_name_to_number(char *name)
+{
+	int names = sizeof(tagNames) / sizeof(char *);
+	int i = 0;
+	enum tag t = 0;
+	while (i < names && t == 0) {
+		if (strcmp(tagNames[i], name) == 0) {
+			t = i;
+		}
+		++i;
+	}
+	return t;
 }
 
 int main(int argc, char **argv)
@@ -132,7 +147,7 @@ int main(int argc, char **argv)
 	}
 
 	char *save_filename = NULL;
-	if (argc == 3) {
+	if (argc >= 3) {
 		save_filename = argv[2];
 	}
 
@@ -155,9 +170,21 @@ int main(int argc, char **argv)
 	if (root == NULL) {
 		fprintf(stderr, "nbtv: invalid NBT\n");
 		exit(EXIT_FAILURE);
+	} else if (save_filename != NULL && argc == 5) {
+		enum tag t = tag_name_to_number(argv[3]);
+		if (t == TAG_End) {
+			fprintf(stderr, "nbtv: invalid tag '%s'\n", argv[3]);
+			exit(EXIT_FAILURE);
+		}
+		struct nbt *node = nbt_find(root, t, argv[4]);
+		if (node == NULL) {
+			fprintf(stderr, "nbtv: couldn't find tag '%s'\n", argv[4]);
+			exit(EXIT_FAILURE);
+		}
+		write_tree(node, save_filename);
+		nbt_free(root);
 	} else if (save_filename != NULL) {
-		size_t n = write_tree(root, save_filename);
-		printf("wrote %ld bytes to '%s'\n", n, save_filename);
+		write_tree(root, save_filename);
 		nbt_free(root);
 	} else {
 		print_tree(root);
