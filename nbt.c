@@ -8,10 +8,12 @@
 
 #include "nbt.h"
 
-struct nbt *nbt_new(char *root_name) {
+struct nbt *nbt_new(enum tag t, char *name) {
 	struct nbt *root = malloc(sizeof(struct nbt));
-	root->tag = TAG_Compound;
-	root->name = root_name;
+	root->tag = t;
+	if (name != NULL) {
+		root->name = strdup(name);
+	}
 	return root;
 }
 
@@ -291,7 +293,7 @@ struct nbt *nbt_unpack(size_t len, const uint8_t *data) {
 		++i;
 		i += nbt_read_string(&root_name, len - i, data + i);
 	}
-	struct nbt *root = nbt_new(root_name);
+	struct nbt *root = nbt_new(TAG_Compound, root_name);
 	if (nbt_unpack_node(root, i, len, data) < 0) {
 		nbt_free(root);
 		return NULL;

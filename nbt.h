@@ -58,7 +58,7 @@ struct nbt_list {
 	struct node *head;
 };
 
-struct nbt *nbt_new(char *root_name);
+struct nbt *nbt_new(enum tag, char *name);
 void nbt_free(struct nbt *);
 
 struct nbt *nbt_unpack(size_t len, const uint8_t *b);
