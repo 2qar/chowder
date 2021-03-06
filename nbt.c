@@ -17,9 +17,9 @@ struct nbt *nbt_new(enum tag t, char *name) {
 	return root;
 }
 
-void nbt_free_node_data(struct nbt *);
+static void nbt_free_node_data(struct nbt *);
 
-void nbt_free_list(struct nbt_list *l) {
+static void nbt_free_list(struct nbt_list *l) {
 	while (!list_empty(l->head)) {
 		struct nbt *node = list_remove(l->head);
 		nbt_free_node_data(node);
@@ -29,9 +29,9 @@ void nbt_free_list(struct nbt_list *l) {
 	free(l);
 }
 
-void nbt_free_node(struct nbt *);
+static void nbt_free_node(struct nbt *);
 
-void nbt_free_node_data(struct nbt *node) {
+static void nbt_free_node_data(struct nbt *node) {
 	switch (node->tag) {
 		case TAG_String:
 			free(node->data.string);
@@ -53,7 +53,7 @@ void nbt_free_node_data(struct nbt *node) {
 	}
 }
 
-void nbt_free_child(struct nbt *child) {
+static void nbt_free_child(struct nbt *child) {
 	nbt_free_node_data(child);
 	if (child->tag != TAG_Compound) {
 		free(child->name);
@@ -61,7 +61,7 @@ void nbt_free_child(struct nbt *child) {
 	free(child);
 }
 
-void nbt_free_node(struct nbt *root) {
+static void nbt_free_node(struct nbt *root) {
 	free(root->name);
 	while (!list_empty(root->data.children)) {
 		struct nbt *child = list_remove(root->data.children);
@@ -79,7 +79,7 @@ void nbt_free(struct nbt *root) {
 	}
 }
 
-int nbt_read_bytes(size_t n, void *dest, size_t i, size_t len, const uint8_t *data) {
+static int nbt_read_bytes(size_t n, void *dest, size_t i, size_t len, const uint8_t *data) {
 	if (n < len && i < len - n) {
 		memcpy(dest, data + i, n);
 		return n;
@@ -87,7 +87,7 @@ int nbt_read_bytes(size_t n, void *dest, size_t i, size_t len, const uint8_t *da
 	return -1;
 }
 
-int nbt_read_short(int16_t *v, size_t i, size_t len, const uint8_t *data) {
+static int nbt_read_short(int16_t *v, size_t i, size_t len, const uint8_t *data) {
 	int n = nbt_read_bytes(2, v, i, len, data);
 	if (n > 0) {
 		*v = ntohs(*v);
@@ -95,7 +95,7 @@ int nbt_read_short(int16_t *v, size_t i, size_t len, const uint8_t *data) {
 	return n;
 }
 
-int nbt_read_int(int32_t *v, size_t i, size_t len, const uint8_t *data) {
+static int nbt_read_int(int32_t *v, size_t i, size_t len, const uint8_t *data) {
 	int n = nbt_read_bytes(4, v, i, len, data);
 	if (n > 0) {
 		*v = ntohl(*v);
@@ -103,7 +103,7 @@ int nbt_read_int(int32_t *v, size_t i, size_t len, const uint8_t *data) {
 	return n;
 }
 
-int nbt_read_long(int64_t *v, size_t i, size_t len, const uint8_t *data) {
+static int nbt_read_long(int64_t *v, size_t i, size_t len, const uint8_t *data) {
 	int n = nbt_read_bytes(8, v, i, len, data);
 	if (n > 0) {
 		*v = be64toh(*v);
@@ -111,7 +111,7 @@ int nbt_read_long(int64_t *v, size_t i, size_t len, const uint8_t *data) {
 	return n;
 }
 
-size_t nbt_read_string(char **name, size_t len, const uint8_t *data) {
+static size_t nbt_read_string(char **name, size_t len, const uint8_t *data) {
 	size_t i = 0;
 
 	uint16_t name_len;
@@ -130,9 +130,9 @@ size_t nbt_read_string(char **name, size_t len, const uint8_t *data) {
 	return i;
 }
 
-int nbt_unpack_node_data(struct nbt *, size_t, size_t, const uint8_t *);
+static int nbt_unpack_node_data(struct nbt *, size_t, size_t, const uint8_t *);
 
-int nbt_read_list(struct nbt_list *l, size_t len, const uint8_t *data) {
+static int nbt_read_list(struct nbt_list *l, size_t len, const uint8_t *data) {
 	l->type = data[0];
 	int32_t list_len;
 	size_t i = 1;
@@ -163,7 +163,7 @@ int nbt_read_list(struct nbt_list *l, size_t len, const uint8_t *data) {
 	return i;
 }
 
-int nbt_read_array(struct nbt_array *a, size_t elem_bytes, size_t len, const uint8_t *data) {
+static int nbt_read_array(struct nbt_array *a, size_t elem_bytes, size_t len, const uint8_t *data) {
 	size_t i = 0;
 	int n = nbt_read_int(&(a->len), i, len, data);
 	if (n > 0) {
@@ -181,7 +181,7 @@ int nbt_read_array(struct nbt_array *a, size_t elem_bytes, size_t len, const uin
 	return i;
 }
 
-int nbt_read_int_array(struct nbt_array **array, size_t len, const uint8_t *data) {
+static int nbt_read_int_array(struct nbt_array **array, size_t len, const uint8_t *data) {
 	struct nbt_array *a = malloc(sizeof(struct nbt_array));
 	a->type = TAG_Int_Array;
 	int n = nbt_read_array(a, 4, len, data);
@@ -192,7 +192,7 @@ int nbt_read_int_array(struct nbt_array **array, size_t len, const uint8_t *data
 	return n;
 }
 
-int nbt_read_long_array(struct nbt_array **array, size_t len, const uint8_t *data) {
+static int nbt_read_long_array(struct nbt_array **array, size_t len, const uint8_t *data) {
 	struct nbt_array *a = malloc(sizeof(struct nbt_array));
 	a->type = TAG_Long_Array;
 	int n = nbt_read_array(a, 8, len, data);
@@ -203,9 +203,9 @@ int nbt_read_long_array(struct nbt_array **array, size_t len, const uint8_t *dat
 	return n;
 }
 
-ssize_t nbt_unpack_node(struct nbt *, size_t, size_t, const uint8_t *);
+static ssize_t nbt_unpack_node(struct nbt *, size_t, size_t, const uint8_t *);
 
-int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *data) {
+static int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *data) {
 	int n = 0;
 	switch (nbt->tag) {
 		case TAG_Byte:
@@ -264,7 +264,7 @@ int nbt_unpack_node_data(struct nbt *nbt, size_t i, size_t len, const uint8_t *d
 	return n;
 }
 
-ssize_t nbt_unpack_node(struct nbt *root, size_t i, size_t len, const uint8_t *data) {
+static ssize_t nbt_unpack_node(struct nbt *root, size_t i, size_t len, const uint8_t *data) {
 	root->data.children = list_new();
 	bool valid_nbt = true;
 	while (valid_nbt && i < len && data[i] != TAG_End) {
@@ -301,9 +301,9 @@ struct nbt *nbt_unpack(size_t len, const uint8_t *data) {
 	return root;
 }
 
-size_t nbt_data_len(struct nbt *);
+static size_t nbt_data_len(struct nbt *);
 
-size_t nbt_list_len(struct nbt_list *list) {
+static size_t nbt_list_len(struct nbt_list *list) {
 	size_t len = 5;
 	struct node *l = list->head;
 	while (!list_empty(l)) {
@@ -313,9 +313,9 @@ size_t nbt_list_len(struct nbt_list *list) {
 	return len;
 }
 
-size_t nbt_node_len(struct nbt *);
+static size_t nbt_node_len(struct nbt *);
 
-size_t nbt_data_len(struct nbt *node) {
+static size_t nbt_data_len(struct nbt *node) {
 	switch (node->tag) {
 		case TAG_End:
 			return 0;
@@ -347,7 +347,7 @@ size_t nbt_data_len(struct nbt *node) {
 	return 0;
 }
 
-size_t nbt_node_len(struct nbt *n) {
+static size_t nbt_node_len(struct nbt *n) {
 	size_t len = 0;
 
 	struct node *l = n->data.children;
@@ -361,7 +361,7 @@ size_t nbt_node_len(struct nbt *n) {
 	return len + 1;
 }
 
-size_t nbt_len(struct nbt *root) {
+static size_t nbt_len(struct nbt *root) {
 	size_t len = 3;
 	if (root->name != NULL) {
 		len += strlen(root->name);
@@ -370,37 +370,37 @@ size_t nbt_len(struct nbt *root) {
 	return len + nbt_node_len(root);
 }
 
-size_t nbt_write_short(int16_t s, uint8_t *data) {
+static size_t nbt_write_short(int16_t s, uint8_t *data) {
 	s = htons(s);
 	memcpy(data, &s, sizeof(int16_t));
 	return sizeof(int16_t);
 }
 
-size_t nbt_write_int(int32_t i, uint8_t *data) {
+static size_t nbt_write_int(int32_t i, uint8_t *data) {
 	i = htonl(i);
 	memcpy(data, &i, sizeof(int32_t));
 	return sizeof(int32_t);
 }
 
-size_t nbt_write_long(int64_t l, uint8_t *data) {
+static size_t nbt_write_long(int64_t l, uint8_t *data) {
 	l = htobe64(l);
 	memcpy(data, &l, sizeof(int64_t));
 	return sizeof(int64_t);
 }
 
-size_t nbt_write_float(float f, uint8_t *data) {
+static size_t nbt_write_float(float f, uint8_t *data) {
 	int32_t i;
 	memcpy(&i, &f, 4);
 	return nbt_write_int(i, data);
 }
 
-size_t nbt_write_double(double d, uint8_t *data) {
+static size_t nbt_write_double(double d, uint8_t *data) {
 	int64_t l;
 	memcpy(&l, &d, 8);
 	return nbt_write_long(l, data);
 }
 
-size_t nbt_write_string(const char *s, uint8_t *data) {
+static size_t nbt_write_string(const char *s, uint8_t *data) {
 	size_t len = 0;
 	size_t s_len = strlen(s);
 	len += nbt_write_short(s_len, data);
@@ -416,7 +416,7 @@ size_t nbt_write_string(const char *s, uint8_t *data) {
 }
 
 
-size_t nbt_write_byte_array(struct nbt_array *a, uint8_t *data) {
+static size_t nbt_write_byte_array(struct nbt_array *a, uint8_t *data) {
 	size_t len = nbt_write_int(a->len, data);
 	for (int32_t i = 0; i < a->len; ++i) {
 		data[len] = a->data.bytes[i];
@@ -425,9 +425,9 @@ size_t nbt_write_byte_array(struct nbt_array *a, uint8_t *data) {
 	return len;
 }
 
-size_t nbt_pack_node_data(struct nbt *, uint8_t *);
+static size_t nbt_pack_node_data(struct nbt *, uint8_t *);
 
-size_t nbt_write_list(struct nbt_list *list, uint8_t *data) {
+static size_t nbt_write_list(struct nbt_list *list, uint8_t *data) {
 	size_t len = 0;
 	data[0] = list->type;
 	++len;
@@ -441,7 +441,7 @@ size_t nbt_write_list(struct nbt_list *list, uint8_t *data) {
 	return len;
 }
 
-size_t nbt_write_int_array(struct nbt_array *a, uint8_t *data) {
+static size_t nbt_write_int_array(struct nbt_array *a, uint8_t *data) {
 	size_t len = nbt_write_int(a->len, data);
 	for (int32_t i = 0; i < a->len; ++i) {
 		len += nbt_write_int(a->data.ints[i], data + len);
@@ -449,7 +449,7 @@ size_t nbt_write_int_array(struct nbt_array *a, uint8_t *data) {
 	return len;
 }
 
-size_t nbt_write_long_array(struct nbt_array *a, uint8_t *data) {
+static size_t nbt_write_long_array(struct nbt_array *a, uint8_t *data) {
 	size_t len = nbt_write_int(a->len, data);
 	for (int32_t i = 0; i < a->len; ++i) {
 		len += nbt_write_long(a->data.longs[i], data + len);
@@ -457,9 +457,9 @@ size_t nbt_write_long_array(struct nbt_array *a, uint8_t *data) {
 	return len;
 }
 
-size_t nbt_pack_node(struct nbt *, uint8_t *);
+static size_t nbt_pack_node(struct nbt *, uint8_t *);
 
-size_t nbt_pack_node_data(struct nbt *n, uint8_t *data) {
+static size_t nbt_pack_node_data(struct nbt *n, uint8_t *data) {
 	switch (n->tag) {
 		case TAG_Byte:
 			*data = n->data.t_byte;
@@ -491,7 +491,7 @@ size_t nbt_pack_node_data(struct nbt *n, uint8_t *data) {
 	}
 }
 
-size_t nbt_pack_node(struct nbt *n, uint8_t *data) {
+static size_t nbt_pack_node(struct nbt *n, uint8_t *data) {
 	size_t len = 0;
 
 	struct node *l = n->data.children;
@@ -542,9 +542,9 @@ size_t nbt_pack(struct nbt *root, uint8_t **data) {
 	return buf_len;
 }
 
-struct nbt *nbt_tree_search(struct nbt *, enum tag, char *, bool);
+static struct nbt *nbt_tree_search(struct nbt *, enum tag, char *, bool);
 
-struct nbt *nbt_list_search(struct nbt_list *l, enum tag t, char *name) {
+static struct nbt *nbt_list_search(struct nbt_list *l, enum tag t, char *name) {
 	assert(l->type == TAG_Compound);
 	struct nbt *node = NULL;
 
@@ -558,7 +558,7 @@ struct nbt *nbt_list_search(struct nbt_list *l, enum tag t, char *name) {
 	return node;
 }
 
-struct nbt *nbt_tree_search(struct nbt *root, enum tag t, char *name, bool recurse) {
+static struct nbt *nbt_tree_search(struct nbt *root, enum tag t, char *name, bool recurse) {
 	struct nbt *node = NULL;
 
 	struct node *head = root->data.children;
