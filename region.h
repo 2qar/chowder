@@ -22,7 +22,7 @@ struct region {
 };
 
 ssize_t read_chunk(FILE *f, int x, int y, size_t *chunk_buf_len, Bytef **chunk);
-struct chunk *parse_chunk(Bytef *chunk_data);
+struct chunk *parse_chunk(size_t len, uint8_t *chunk_data);
 void free_chunk(struct chunk *);
 void free_region(struct region *);
 

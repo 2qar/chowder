@@ -311,14 +311,16 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	}
 	write_varint(&p, section_bit_mask);
 
-	struct nbt n = {0};
-	nbt_write_init(&n, "");
 	/* TODO: actually calculate heightmaps */
+	struct nbt *n = nbt_new(TAG_Long_Array, "MOTION_BLOCKING");
+	struct nbt_array *arr = malloc(sizeof(struct nbt_array));
 	int64_t heightmaps[36] = {0};
-	nbt_write_long_array(&n, "MOTION_BLOCKING", 36, heightmaps);
-	nbt_finish(&n);
-	write_nbt(&p, &n);
-	free(n.data);
+	arr->len = 36;
+	arr->data.longs = heightmaps;
+	n->data.array = arr;
+	write_nbt(&p, n);
+	arr->data.longs = NULL;
+	nbt_free(n);
 
 	if (full) {
 		if (chunk->biomes != NULL) {

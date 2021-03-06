@@ -228,7 +228,7 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, const uint8_
 			if (chunk == NULL) {
 				int uncompressed_len = read_chunk(f, x, z, &chunk_buf_len, &chunk_buf);
 				if (uncompressed_len > 0) {
-					chunk = parse_chunk(chunk_buf);
+					chunk = parse_chunk(uncompressed_len, chunk_buf);
 					if (chunk == NULL) {
 						fprintf(stderr, "also panic\n");
 						return -1;

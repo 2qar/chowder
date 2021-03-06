@@ -217,6 +217,7 @@ void write_long(struct send_packet *p, uint64_t l) {
 }
 
 void write_nbt(struct send_packet *p, struct nbt *n) {
-	for (int i = 0; i < n->_index; ++i)
-		write_byte(p, n->data[i]);
+	uint8_t *n_data;
+	size_t n_len = nbt_pack(n, &n_data);
+	write_bytes_direct(p, n_len, n_data);
 }

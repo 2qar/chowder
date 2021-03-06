@@ -65,97 +65,88 @@ ssize_t read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, Bytef **chunk) 
 	return uncompressed_len;
 }
 
-void read_blockstates(struct section *s, struct nbt *nbt_data, int blockstates_index) {
-	nbt_data->_index = blockstates_index;
+/* returns the length of a string w/ a block's name + all of it's properties
+ * and values, like "minecraft:water;level=5"
+ */
+size_t block_name_and_properties_length(struct nbt *block) {
+	struct nbt *name = nbt_get(block, TAG_String, "Name");
+	/* FIXME: relying on asserts here is kinda lame */
+	assert(name != NULL);
+	size_t name_len = strlen(name->data.string);
 
-	size_t blockstates_len = nbt_array_len(nbt_data);
-	uint64_t *blockstates = malloc(sizeof(uint64_t) * blockstates_len);
-	memcpy(blockstates, nbt_data->data + nbt_data->_index, s->bits_per_block * TOTAL_BLOCKSTATES / 8);
-	for (size_t i = 0; i < blockstates_len; ++i)
-		blockstates[i] = be64toh(blockstates[i]);
-
-	s->blockstates = blockstates;
-}
-
-int strcoll_cmp(const void *p1, const void *p2) {
-	const char *s1 = *((const char **) p1);
-	const char *s2 = *((const char **) p2);
-
-	return strcoll(s1, s2);
-}
-
-char *parse_block_properties(struct nbt *n, int properties_index) {
-	n->_index = properties_index;
-	nbt_skip_tag_name(n);
-
-	int properties_len = 0;
-	char *properties[8] = {0};
-	size_t combined_len = 0;
-	while (n->data[n->_index] != TAG_End) {
-		int prop_start = n->_index;
-
-		char *property = malloc(sizeof(char) * 64);
-		int r = nbt_read_tag_name(n, 64, property);
-		strcat(property, "=");
-		++r;
-		n->_index = prop_start;
-		r += nbt_read_string(n, 64 - r, property + r);
-
-		properties[properties_len] = property;
-		combined_len += r;
-		++properties_len;
-	}
-
-	char *s = "";
-	if (properties_len > 0) {
-		qsort(properties, properties_len, sizeof(char *), strcoll_cmp);
-
-		combined_len += properties_len;
-		char *combined = malloc(sizeof(char) * combined_len);
-		int written = 0;
-		for (int i = 0; i < properties_len; ++i) {
-			char *start = combined + written;
-			size_t remaining = combined_len - written;
-			written += snprintf(start, remaining, ";%s", properties[i]);
+	struct nbt *properties = nbt_get(block, TAG_Compound, "Properties");
+	if (properties != NULL) {
+		struct node *l = properties->data.children;
+		while (!list_empty(l)) {
+			struct nbt *property = list_item(l);
+			name_len += strlen(property->name);
+			name_len += strlen(property->data.string);
+			name_len += 2;
+			l = list_next(l);
 		}
-
-		for (int i = 0; i < properties_len; ++i)
-			free(properties[i]);
-		s = combined;
 	}
 
-	return s;
+	return name_len;
 }
 
-int parse_palette_entry(struct nbt *n) {
-	size_t name_len = 128;
-	char *name = malloc(sizeof(char) * name_len);
+int block_property_cmp(const void *p1, const void *p2) {
+	const struct nbt *prop1 = *(struct nbt **) p1;
+	const struct nbt *prop2 = *(struct nbt **) p2;
 
-	int block_start = n->_index;
-	int block_end = nbt_compound_seek_end(n);
-	n->_index = block_start;
+	return strcoll(prop1->name, prop2->name);
+}
 
-	int name_index = nbt_compound_seek_tag(n, TAG_String, "Name");
-	n->_index = name_index;
-	nbt_read_string(n, name_len, name);
+size_t sorted_properties(struct nbt *properties_nbt, struct nbt ***properties) {
+	size_t properties_len = list_len(properties_nbt->data.children);
+	*properties = malloc(sizeof(struct nbt *) * properties_len);
 
-	n->_index = block_start;
-	int properties_index = nbt_compound_seek_tag(n, TAG_Compound, "Properties");
-	if (properties_index != -1) {
-		char *properties = parse_block_properties(n, properties_index);
-		strncat(name, properties, name_len - strlen(name) - 1);
-		free(properties);
+	struct node *l = properties_nbt->data.children;
+	size_t i = 0;
+	while (!list_empty(l)) {
+		(*properties)[i] = list_item(l);
+		++i;
+		l = list_next(l);
 	}
-	n->_index = block_end;
+
+	if (properties_len > 1) {
+		qsort(*properties, properties_len, sizeof(struct nbt *), block_property_cmp);
+	}
+	return properties_len;
+}
+
+int palette_entry_to_block_id(struct nbt *block) {
+	size_t name_len = block_name_and_properties_length(block);
+	char *name = malloc(sizeof(char) * (name_len + 1));
+
+	size_t properties_len = 0;
+	struct nbt **properties = NULL;
+	struct nbt *properties_nbt = nbt_get(block, TAG_Compound, "Properties");
+	if (properties_nbt != NULL) {
+		properties_len = sorted_properties(properties_nbt, &properties);
+	}
+
+	struct nbt *block_name = nbt_get(block, TAG_String, "Name");
+	assert(block_name != NULL);
+	name[0] = '\0';
+	strcat(name, block_name->data.string);
+	for (size_t i = 0; i < properties_len; ++i) {
+		/* FIXME: name is """guaranteed""" to be big enough,
+		 *        but this is still icky
+		 */
+		strcat(name, ";");
+		strcat(name, properties[i]->name);
+		strcat(name, "=");
+		strcat(name, properties[i]->data.string);
+	}
 
 	int id = block_id(name);
 	free(name);
+	free(properties);
 	return id;
 }
 
-void parse_palette(struct section *s, struct nbt *n, int palette_index) {
-	n->_index = palette_index;
-	s->palette_len = nbt_list_len(n);
+void build_palette(struct section *s, struct nbt_list *palette) {
+	s->palette_len = list_len(palette->head);
 	s->bits_per_block = (int) ceil(log2(s->palette_len));
 	if (s->bits_per_block < 4)
 		s->bits_per_block = 4;
@@ -163,66 +154,69 @@ void parse_palette(struct section *s, struct nbt *n, int palette_index) {
 		s->bits_per_block = GLOBAL_BITS_PER_BLOCK;
 
 	s->palette = malloc(sizeof(int) * s->palette_len);
-	for (int i = 0; i < s->palette_len; ++i)
-		s->palette[i] = parse_palette_entry(n);
+	struct node *l = palette->head;
+	int i = 0;
+	while (!list_empty(l)) {
+		s->palette[i] = palette_entry_to_block_id(list_item(l));
+		++i;
+		l = list_next(l);
+	}
 }
 
-struct chunk *parse_chunk(Bytef *chunk_data) {
+struct chunk *parse_chunk(size_t chunk_data_len, uint8_t *chunk_data) {
 	struct chunk *c = malloc(sizeof(struct chunk));
 
-	struct nbt nbt_data = {0};
-	nbt_data.data = chunk_data;
-	int section_index = nbt_tag_seek(&nbt_data, TAG_List, "Sections");
-	if (section_index == -1) {
+	struct nbt *n = nbt_unpack(chunk_data_len, chunk_data);
+	if (n == NULL) {
+		fprintf(stderr, "fuck\n");
+		return NULL;
+	}
+	struct nbt *level = nbt_get(n, TAG_Compound, "Level");
+	assert(level != NULL);
+	struct nbt *sections = nbt_get(level, TAG_List, "Sections");
+	if (sections == NULL) {
 		fprintf(stderr, "couldn't find sections, aborting\n");
 		return NULL;
 	}
-	c->sections_len = nbt_list_len(&nbt_data);
 
-	for (int i = 0; i < c->sections_len; ++i) {
+	struct node *l = sections->data.list->head;
+	c->sections_len = 0;
+	while (!list_empty(l)) {
+		struct nbt *s_nbt = list_item(l);
 		struct section *s = calloc(1, sizeof(struct section));
-		int section_start = nbt_data._index;
-		int section_end = nbt_compound_seek_end(&nbt_data);
-		nbt_data._index = section_start;
 
-		/* read this section's Y index */
-		int y_index = nbt_compound_seek_tag(&nbt_data, TAG_Byte, "Y");
-		if (y_index != -1) {
-			nbt_data._index = y_index;
-			s->y = nbt_read_byte(&nbt_data);
+		struct nbt *y_index = nbt_get(s_nbt, TAG_Byte, "Y");
+		if (y_index != NULL) {
+			s->y = y_index->data.t_byte;
 		}
-		nbt_data._index = section_start;
 
-		/* read palette */
-		int palette_index = nbt_compound_seek_tag(&nbt_data, TAG_List, "Palette");
+		struct nbt *palette = nbt_get(s_nbt, TAG_List, "Palette");
 		s->bits_per_block = -1;
 		s->palette_len = -1;
-		if (palette_index != -1)
-			parse_palette(s, &nbt_data, palette_index);
-
-		/* read blockstates */
-		nbt_data._index = section_start;
-		int blockstates_index = nbt_compound_seek_tag(&nbt_data, TAG_Long_Array, "BlockStates");
-		if (blockstates_index != -1 && s->bits_per_block != -1) {
-			s->blockstates = malloc(sizeof(int) * TOTAL_BLOCKSTATES);
-			read_blockstates(s, &nbt_data, blockstates_index);
+		if (palette != NULL) {
+			build_palette(s, palette->data.list);
 		}
 
-		nbt_data._index = section_end;
-		c->sections[i] = s;
+		struct nbt *blockstates = nbt_get(s_nbt, TAG_Long_Array, "BlockStates");
+		if (blockstates != NULL) {
+			s->blockstates = (uint64_t *) blockstates->data.array->data.longs;
+			blockstates->data.array->data.longs = NULL;
+		}
+
+		c->sections[c->sections_len] = s;
+		++(c->sections_len);
+		l = list_next(l);
 	}
 
 	c->biomes = NULL;
-	nbt_data._index = 0;
-	int biomes_index = nbt_tag_seek(&nbt_data, TAG_Int_Array, "Biomes");
-	if (biomes_index != -1) {
-		int biomes_len = nbt_array_len(&nbt_data);
-		assert(biomes_len == BIOMES_LEN);
-		c->biomes = malloc(sizeof(int) * biomes_len);
-		memcpy(c->biomes, nbt_data.data + nbt_data._index, sizeof(int) * biomes_len);
-		nbt_data._index += biomes_len;
+	struct nbt *biomes = nbt_get(level, TAG_Int_Array, "Biomes");
+	if (biomes != NULL) {
+		assert(biomes->data.array->len == BIOMES_LEN);
+		c->biomes = biomes->data.array->data.ints;
+		biomes->data.array->data.ints = NULL;
 	}
 
+	nbt_free(n);
 	return c;
 }
 
