@@ -322,13 +322,14 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	arr->data.longs = NULL;
 	nbt_free(n);
 
-	if (full) {
-		if (chunk->biomes != NULL) {
-			write_bytes_direct(&p, sizeof(int) * BIOMES_LEN, chunk->biomes);
-		} else {
-			for (int i = 0; i < BIOMES_LEN; ++i)
-				/* void biome */
-				write_int(&p, 127);
+	if (full && chunk->biomes != NULL) {
+		for (int i = 0; i < BIOMES_LEN; ++i) {
+			write_int(&p, chunk->biomes[i]);
+		}
+	} else if (full) {
+		for (int i = 0; i < BIOMES_LEN; ++i) {
+			/* void biome */
+			write_int(&p, 127);
 		}
 	}
 
