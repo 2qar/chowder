@@ -9,7 +9,7 @@
 #include "nbt.h"
 
 struct nbt *nbt_new(enum tag t, char *name) {
-	struct nbt *root = malloc(sizeof(struct nbt));
+	struct nbt *root = calloc(1, sizeof(struct nbt));
 	root->tag = t;
 	if (name != NULL) {
 		root->name = strdup(name);
