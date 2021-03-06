@@ -146,7 +146,7 @@ struct chunk *chunk_at(const char *filename, int x, int z) {
 		fprintf(stderr, "cv: no chunk at \"%d,%d\"\n", x, z);
 		exit(EXIT_FAILURE);
 	}
-	struct chunk *c = parse_chunk(chunk_buf);
+	struct chunk *c = parse_chunk(len, chunk_buf);
 	if (c == NULL) {
 		fprintf(stderr, "cv: error parsing chunk\n");
 		exit(EXIT_FAILURE);
