@@ -51,22 +51,30 @@ void nbt_free_node_data(struct nbt *node) {
 	}
 }
 
+void nbt_free_child(struct nbt *child) {
+	nbt_free_node_data(child);
+	if (child->tag != TAG_Compound) {
+		free(child->name);
+	}
+	free(child);
+}
+
 void nbt_free_node(struct nbt *root) {
 	free(root->name);
 	while (!list_empty(root->data.children)) {
 		struct nbt *child = list_remove(root->data.children);
-		nbt_free_node_data(child);
-		if (child->tag != TAG_Compound) {
-			free(child->name);
-		}
-		free(child);
+		nbt_free_child(child);
 	}
 	list_free(root->data.children);
 }
 
 void nbt_free(struct nbt *root) {
-	nbt_free_node(root);
-	free(root);
+	if (root->tag == TAG_Compound) {
+		nbt_free_node(root);
+		free(root);
+	} else {
+		nbt_free_child(root);
+	}
 }
 
 int nbt_read_bytes(size_t n, void *dest, size_t i, size_t len, const uint8_t *data) {
