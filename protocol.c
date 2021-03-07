@@ -267,15 +267,23 @@ int spawn_position(struct conn *c, uint16_t x, uint16_t y, uint16_t z) {
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
+bool is_air(int blockstate) {
+	/* TODO: don't hardcode these */
+	return blockstate == 0 || blockstate == 9129 || blockstate == 9130;
+}
+
 size_t write_section_to_packet(const struct section *s, struct send_packet *p) {
 	if (s->bits_per_block == -1)
 		return 0;
 
 	/* count non-air blocks */
 	uint16_t block_count = 0;
-	for (int b = 0; b < TOTAL_BLOCKSTATES; ++b)
-		if (s->blockstates[b] != 0)
+	for (int i = 0; i < TOTAL_BLOCKSTATES; ++i) {
+		int palette_idx = read_blockstate_at(s, i % 16, (i / 16) % 16, i / (16*16));
+		if (!is_air(s->palette[palette_idx])) {
 			++block_count;
+		}
+	}
 	write_short(p, block_count);
 
 	/* palette */
