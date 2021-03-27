@@ -27,14 +27,13 @@
 #define LEVEL_PATH "levels/default"
 
 #define BLOCKS_PATH "gamedata/blocks.json"
-#define DER_KEY_LEN 162
 
 int check_level_path(char *);
 int bind_socket();
 int generate_key(EVP_PKEY **pkey);
-int rsa_der(EVP_PKEY *pkey, uint8_t **der);
+int rsa_der(EVP_PKEY *pkey, size_t *der_len, uint8_t **der);
 EVP_PKEY_CTX *pkey_ctx_init(EVP_PKEY *);
-int handle_connection(struct world *, int conn_fd, EVP_PKEY_CTX *ctx, const uint8_t *der);
+int handle_connection(struct world *, int conn_fd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der);
 
 int main() {
 	/* socket init */
@@ -56,7 +55,8 @@ int main() {
 		exit(EXIT_FAILURE);
 
 	uint8_t *der = NULL;
-	if (rsa_der(pkey, &der) > 0)
+	size_t der_len;
+	if (rsa_der(pkey, &der_len, &der) > 0)
 		exit(EXIT_FAILURE);
 
 	EVP_PKEY_CTX *ctx = pkey_ctx_init(pkey);
@@ -69,7 +69,7 @@ int main() {
 	for (;;) {
 		int conn;
 		if ((conn = accept(sfd, NULL, NULL)) != -1) {
-			handle_connection(w, conn, ctx, der);
+			handle_connection(w, conn, ctx, der_len, der);
 		} else {
 			perror("accept");
 		}
@@ -140,18 +140,17 @@ int generate_key(EVP_PKEY **pkey) {
 	return 0;
 }
 
-int rsa_der(EVP_PKEY *pkey, uint8_t **der) {
-	*der = malloc(DER_KEY_LEN + 1);
+int rsa_der(EVP_PKEY *pkey, size_t *der_len, uint8_t **der) {
+	int len = i2d_PUBKEY(pkey, NULL);
+	*der = malloc(len + 1);
 	int n = i2d_PUBKEY(pkey, der);
 	if (n < 0) {
 		fprintf(stderr, "i2d_PUBKEY(): %lu\n", ERR_get_error());
 		return 1;
-	} else if (n != DER_KEY_LEN) {
-		fprintf(stderr, "len mismatch: %d != %d\n", n, DER_KEY_LEN);
-		return 1;
 	}
 	*der -= n;
-	(*der)[DER_KEY_LEN] = 0;
+	(*der)[len] = 0;
+	*der_len = len;
 	return 0;
 }
 
@@ -174,7 +173,7 @@ EVP_PKEY_CTX *pkey_ctx_init(EVP_PKEY *pkey) {
 	return ctx;
 }
 
-int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, const uint8_t *der) {
+int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der) {
 	int next_state = handshake(conn);
 	if (next_state == 1) {
 		handle_server_list_ping(conn);
@@ -185,7 +184,7 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, const uint8_
 
 	struct conn c = {0};
 	EVP_PKEY_CTX *login_decrypt_ctx = EVP_PKEY_CTX_dup(ctx);
-	int err = login(conn, &c, der, DER_KEY_LEN, login_decrypt_ctx);
+	int err = login(conn, &c, der, der_len, login_decrypt_ctx);
 	if (err < 0) {
 		// TODO: return meaningful errors instead of -1 everywhere
 		fprintf(stderr, "error logging in: %d\n", err);
