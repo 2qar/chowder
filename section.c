@@ -29,6 +29,9 @@ struct block_pos block_pos(const struct section *s, int x, int y, int z) {
 	p.offset = (block_index * s->bits_per_block) % 64;
 	p.start_long = (block_index * s->bits_per_block) / 64;
 	p.end_long = ((block_index + 1) * s->bits_per_block) / 64;
+	if (64 - p.offset == (uint64_t) s->bits_per_block) {
+		p.end_long = p.start_long;
+	}
 
 	return p;
 }
