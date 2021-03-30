@@ -76,7 +76,8 @@ int encryption_request(int sfd, size_t der_len, const unsigned char *der, uint8_
 	struct send_packet *p = malloc(sizeof(struct send_packet));
 	make_packet(p, 0x01);
 
-	char server_id[] = "                    "; // kinda dumb but ok
+	char server_id[20];
+	memset(server_id, ' ', 20);
 	write_string(p, 20, server_id);
 
 	write_varint(p, der_len);
