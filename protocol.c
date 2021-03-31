@@ -29,7 +29,9 @@ int handshake(int sfd) {
 	}
 
 	uint16_t port;
-	read_ushort(p, &port);
+	if (!read_ushort(p, &port)) {
+		return -1;
+	}
 
 	int next_state;
 	if (read_varint(p, &next_state) < 0)
@@ -63,8 +65,10 @@ int login_start(int sfd, char username[]) {
 	struct recv_packet *p = malloc(sizeof(struct recv_packet));
 	if (parse_packet(p, sfd) < 0)
 		return -1;
-	int len;
-	if ((len = read_string(p, username)) > 16) {
+	int len = read_string(p, username);
+	if (len < 0) {
+		return -1;
+	} else if (len > 16) {
 		fprintf(stderr, "login_start: expected username to be 16 characters, got %d\n", len);
 		return -1;
 	}
@@ -102,8 +106,12 @@ int decrypt_byte_array(struct recv_packet *p, EVP_PKEY_CTX *ctx, size_t len, uin
 		return -1;
 	}
 	uint8_t encrypted[128];
-	for (int i = 0; i < 128; ++i)
-		encrypted[i] = read_byte(p);
+	int i = 0;
+	while (i < 128 && read_byte(p, &(encrypted[i])))
+		++i;
+	if (i != 128)
+		return -1;
+
 	int n;
 	if ((n = EVP_PKEY_decrypt(ctx, out, &len, encrypted, 128)) < 0) {
 		fprintf(stderr, "EVP_PKEY_decrypt: %lu", ERR_get_error());
@@ -158,8 +166,12 @@ int ping(int sfd, uint8_t l[8]) {
 	if (parse_packet(&p, sfd) < 0)
 		return -1;
 
-	for (int i = 0; i < 8; ++i)
-		l[i] = read_byte(&p);
+	int i = 0;
+	while (i < 8 && read_byte(&p, &(l[i])))
+		++i;
+	if (i != 8)
+		return -1;
+
 	return 0;
 }
 
@@ -214,7 +226,9 @@ int client_settings(struct conn *c) {
 		return -1;
 	puts(locale);
 
-	uint8_t view_distance = read_byte(&p);
+	uint8_t view_distance;
+	if (!read_byte(&p, &view_distance))
+		return -1;
 	printf("view distance: %d\n", view_distance);
 
 	int chat_mode;
@@ -222,10 +236,14 @@ int client_settings(struct conn *c) {
 		return -1;
 	printf("chat mode: %d\n", chat_mode);
 
-	uint8_t chat_colors = read_byte(&p);
+	uint8_t chat_colors;
+	if (!read_byte(&p, &chat_colors))
+		return -1;
 	printf("chat colors: %d\n", chat_colors);
 
-	uint8_t displayed_skin = read_byte(&p);
+	uint8_t displayed_skin;
+	if (!read_byte(&p, &displayed_skin))
+		return -1;
 	printf("displayed skin shit: %d\n", displayed_skin);
 
 	int main_hand;
@@ -418,9 +436,10 @@ int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id) {
 
 int keep_alive_serverbound(struct recv_packet *p, uint64_t id) {
 	uint64_t client_id;
-	read_long(p, &client_id);
-	/* maybe this function isn't the right place for handling the ID mismatch */
-	if (client_id != id) {
+	if (!read_long(p, &client_id)) {
+		return -1;
+	} else if (client_id != id) {
+		/* FIXME: maybe this function isn't the right place for handling the ID mismatch */
 		fprintf(stderr, "keep alive ID mismatch\n");
 		return -1;
 	}
@@ -436,7 +455,8 @@ int player_block_placement(struct recv_packet *p, struct world *w) {
 
 	int32_t x, z;
 	int16_t y;
-	read_position(p, &x, &y, &z);
+	if (!read_position(p, &x, &y, &z))
+		return -1;
 
 	int face;
 	if (read_varint(p, &face) < 0)
@@ -469,8 +489,9 @@ int player_block_placement(struct recv_packet *p, struct world *w) {
 	/* TODO: implement read_float() for cursor pos x,y,z */
 	p->_index += 12;
 
-	// head_in_block bool
-	read_byte(p);
+	uint8_t head_in_block;
+	if (!read_byte(p, &head_in_block))
+		return -1;
 
 	struct chunk *c = world_chunk_at(w, x, z);
 	int i = (y / 16) + 1;

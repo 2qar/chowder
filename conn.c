@@ -24,23 +24,25 @@ void conn_finish(struct conn *c) {
 	EVP_CIPHER_CTX_free(c->_encrypt_ctx);
 }
 
-ssize_t read_encrypted_byte(void *src) {
+bool read_encrypted_byte(void *src, uint8_t *b) {
 	struct conn *c = (struct conn *)src;
-	ssize_t b = sfd_read_byte((void *) &(c->_sfd));
-	if (b < 0)
-		return b;
+	if (!sfd_read_byte((void *) &(c->_sfd), b))
+		return false;
 
 	int outl = 1;
 	uint8_t decrypted[1];
-	if (!EVP_CipherUpdate(c->_decrypt_ctx, decrypted, &outl, (uint8_t *) &b, 1)) {
+	if (!EVP_CipherUpdate(c->_decrypt_ctx, decrypted, &outl, b, 1)) {
 		fprintf(stderr, "error decrypting byte\n");
 		return -1;
 	}
-
-	return (ssize_t)(decrypted[0]);
+	*b = decrypted[0];
+	return true;
 }
 
 int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
+	/* TODO: just recv() 5 bytes w/ MSG_PEEK into a packet buf
+	 *       instead of calling read()'ing individual bytes like
+	 *       read_encrypted_byte() does */
 	int packet_len_bytes = read_varint_gen(read_encrypted_byte, (void *) c, &(p->_packet_len));
 	if (packet_len_bytes < 0) {
 		fprintf(stderr, "error reading packet length\n");

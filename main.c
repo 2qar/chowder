@@ -224,6 +224,7 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 	for (;;) {
 		int polled = poll(&pfd, 1, 100);
 		if (polled > 0 && (pfd.revents & POLLIN)) {
+			/* FIXME: disconnects aren't being handled anymore */
 			int result = conn_parse_packet(&c, &p);
 			if (result < 0) {
 				if (result == ERR_CONN_CLOSED)

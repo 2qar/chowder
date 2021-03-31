@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 
@@ -9,32 +10,34 @@
 
 #define FINISHED_PACKET_ID 255
 
-ssize_t packet_read_byte(void *p) {
-	return (ssize_t) read_byte((struct recv_packet *) p);
+bool packet_read_byte(void *p, uint8_t *b) {
+	return read_byte((struct recv_packet *) p, b);
 }
 
-ssize_t sfd_read_byte(void *sfd) {
-	ssize_t b;
-	int n = read(*((int *) sfd), &b, (size_t) 1);
+bool sfd_read_byte(void *sfd, uint8_t *b) {
+	int n = read(*((int *) sfd), b, 1);
 	if (n == -1) {
-		perror("read");
-		return -1;
+		*b = ERR_BAD_READ;
+		return false;
 	} else if (n == 0) {
-		return ERR_CONN_CLOSED;
+		*b = ERR_CONN_CLOSED;
+		return false;
 	}
-	return b;
+	return true;
 }
 
-int read_varint_gen(ssize_t (*read_byte)(void *), void *src, int *v) {
+int read_varint_gen(read_byte_func rb, void *src, int *v) {
 	int n = 0;
 	*v = 0;
-	/* FIXME: this needs to be a normal, signed byte */
-	ssize_t b;
+	uint8_t b;
 	do {
-		if ((b = (*read_byte)(src)) < 0)
+		if (!rb(src, &b))
 			return b;
-		*v |= ((b & 0x7f) << (7 * n++));
+		*v |= ((((int32_t) b) & 0x7f) << (7 * n++));
 	} while ((b & 0x80) != 0);
+
+	/* FIXME: check that only 5 bytes are read, because that's the max len
+	 *        https://wiki.vg/Protocol#VarInt_and_VarLong */
 
 	return n;
 }
@@ -45,10 +48,10 @@ int read_varint_sfd(int sfd, int *v) {
 
 int parse_packet(struct recv_packet *p, int sfd) {
 	if (read_varint_sfd(sfd, &(p->_packet_len)) < 0)
-		return -1;
+		return p->_packet_len;
 	int id_len;
 	if ((id_len = read_varint_sfd(sfd, &(p->packet_id))) < 0)
-		return -1;
+		return p->packet_id;
 
 	int n;
 	if ((n = read(sfd, p->_data, p->_packet_len-id_len)) <= 0) {
@@ -59,9 +62,12 @@ int parse_packet(struct recv_packet *p, int sfd) {
 	return n;
 }
 
-// TODO: probably check index against packet_len before just returning stuff
-uint8_t read_byte(struct recv_packet *p) {
-	return p->_data[p->_index++];
+bool read_byte(struct recv_packet *p, uint8_t *b) {
+	if (p->_index + 1 == MAX_PACKET_LEN)
+		return false;
+
+	*b = p->_data[p->_index++];
+	return true;
 }
 
 int read_varint(struct recv_packet *p, int *v) {
@@ -69,37 +75,59 @@ int read_varint(struct recv_packet *p, int *v) {
 }
 
 // TODO: take buffer length as an argument for safety
-int read_string(struct recv_packet *p, char b[]) {
+int read_string(struct recv_packet *p, char buf[]) {
 	int len;
 	if (read_varint(p, &len) < 0)
+		return len;
+
+	int i = 0;
+	while (i < len && read_byte(p, (uint8_t *) &(buf[i])))
+		++i;
+
+	if (i != len)
 		return -1;
 
-	for (int i = 0; i < len; ++i)
-		b[i] = read_byte(p);
-	b[len] = 0;
+	buf[len] = 0;
 	return len;
 }
 
-void read_ushort(struct recv_packet *p, uint16_t *s) {
-	*s = read_byte(p) << 8;
-	*s += read_byte(p);
+bool read_ushort(struct recv_packet *p, uint16_t *s) {
+	uint8_t b;
+	if (!read_byte(p, &b))
+		return false;
+	*s = ((uint16_t) b) << 8;
+	if (!read_byte(p, &b))
+		return false;
+	*s += b;
+	return true;
 }
 
-void read_long(struct recv_packet *p, uint64_t *l) {
+bool read_long(struct recv_packet *p, uint64_t *l) {
 	uint64_t hl = 0;
-	for (int i = 7; i >= 0; --i)
-		hl |= ((uint64_t) read_byte(p)) << (i * 8);
+	int i = 7;
+	uint8_t b;
+	while (i >= 0 && read_byte(p, &b)) {
+		hl |= ((uint64_t) b) << (i * 8);
+		--i;
+	}
+
+	if (i != -1)
+		return false;
 	*l = hl;
+	return true;
 }
 
 /* TODO: test w/ negative values if i ever get around to sending chunks w/
  *       negative coordinates xd */
-void read_position(struct recv_packet *p, int32_t *x, int16_t *y, int32_t *z) {
+bool read_position(struct recv_packet *p, int32_t *x, int16_t *y, int32_t *z) {
 	uint64_t l;
-	read_long(p, &l);
+	if (!read_long(p, &l))
+		return false;
+
 	*x = l >> 38;
 	*y = l & 0xFFF;
 	*z = (l << 26 >> 38);
+	return true;
 }
 
 void make_packet(struct send_packet *p, int id) {
