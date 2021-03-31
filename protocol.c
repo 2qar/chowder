@@ -24,7 +24,7 @@ int handshake(int sfd) {
 		return -1;
 	
 	char ip[1000];
-	if (read_string(p, ip) < 0) {
+	if (read_string(p, 1000, ip) < 0) {
 		return -1;
 	}
 
@@ -65,7 +65,7 @@ int login_start(int sfd, char username[]) {
 	struct recv_packet *p = malloc(sizeof(struct recv_packet));
 	if (parse_packet(p, sfd) < 0)
 		return -1;
-	int len = read_string(p, username);
+	int len = read_string(p, 17, username);
 	if (len < 0) {
 		return -1;
 	} else if (len > 16) {
@@ -222,7 +222,7 @@ int client_settings(struct conn *c) {
 		return -1;
 
 	char locale[17] = {0};
-	if (read_string(&p, locale) < 0)
+	if (read_string(&p, 17, locale) < 0)
 		return -1;
 	puts(locale);
 

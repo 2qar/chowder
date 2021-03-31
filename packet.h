@@ -31,7 +31,7 @@ int parse_packet(struct recv_packet *, int sfd);
  * return false if there's no data left to be read. */
 bool read_byte(struct recv_packet *p, uint8_t *);
 int read_varint(struct recv_packet *, int *);
-int read_string(struct recv_packet *, char[]);
+int read_string(struct recv_packet *, int buf_len, char *buf);
 bool read_ushort(struct recv_packet *, uint16_t *);
 bool read_long(struct recv_packet *, uint64_t *);
 bool read_position(struct recv_packet *, int32_t *x, int16_t *y, int32_t *z);

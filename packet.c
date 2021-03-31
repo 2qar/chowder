@@ -74,21 +74,20 @@ int read_varint(struct recv_packet *p, int *v) {
 	return read_varint_gen(&packet_read_byte, (void *) p, v);
 }
 
-// TODO: take buffer length as an argument for safety
-int read_string(struct recv_packet *p, char buf[]) {
+int read_string(struct recv_packet *p, int buf_len, char *buf) {
 	int len;
 	if (read_varint(p, &len) < 0)
 		return len;
 
 	int i = 0;
-	while (i < len && read_byte(p, (uint8_t *) &(buf[i])))
+	while (i < buf_len && i < len && read_byte(p, (uint8_t *) &(buf[i])))
 		++i;
 
 	if (i != len)
 		return -1;
 
-	buf[len] = 0;
-	return len;
+	buf[i] = 0;
+	return i;
 }
 
 bool read_ushort(struct recv_packet *p, uint16_t *s) {
