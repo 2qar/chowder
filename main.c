@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -26,11 +27,19 @@
 
 #define BLOCKS_PATH "gamedata/blocks.json"
 
+static bool running = true;
+
+void sigint_handler(int);
 int check_level_path(char *);
 int bind_socket();
 int handle_connection(struct world *, int conn_fd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der);
 
 int main() {
+	struct sigaction act = {0};
+	act.sa_handler = sigint_handler;
+	if (sigaction(SIGINT, &act, NULL) < 0)
+		perror("sigaction");
+
 	/* socket init */
 	int sfd = bind_socket();
 	if (sfd < 0)
@@ -61,14 +70,16 @@ int main() {
 	struct world *w = world_new();
 
 	/* connection handling */
-	for (;;) {
-		int conn;
-		if ((conn = accept(sfd, NULL, NULL)) != -1) {
+	while (running) {
+		int conn = accept(sfd, NULL, NULL);
+		if (conn != -1) {
 			handle_connection(w, conn, ctx, der_len, der);
-		} else {
+		} else if (errno != EINTR) {
 			perror("accept");
 		}
 	}
+
+	puts("shutdown time");
 
 	free(der);
 	EVP_PKEY_CTX_free(ctx);
@@ -76,6 +87,11 @@ int main() {
 	close(sfd);
 
 	exit(EXIT_SUCCESS);
+}
+
+void sigint_handler(int signum) {
+	assert(signum == SIGINT);
+	running = false;
 }
 
 int check_level_path(char *level_path) {
