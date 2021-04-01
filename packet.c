@@ -199,9 +199,7 @@ void packet_write_bytes_direct(struct packet *p, size_t len, void *data) {
 
 void packet_write_short(struct packet *p, int16_t s) {
 	uint16_t ns = htons(s);
-	memcpy(p->data + p->index, &ns, sizeof(uint16_t));
-	p->index += sizeof(uint16_t);
-	p->packet_len += sizeof(uint16_t);
+	packet_write_bytes_direct(p, sizeof(uint16_t), &ns);
 }
 
 int packet_write_varint(struct packet *p, int i) {
@@ -228,9 +226,7 @@ void packet_write_string(struct packet *p, int len, const char s[]) {
 
 void packet_write_int(struct packet *p, int32_t i) {
 	uint32_t ni = htonl(i);
-	memcpy(p->data + p->index, &ni, 4);
-	p->index += 4;
-	p->packet_len += 4;
+	packet_write_bytes_direct(p, sizeof(uint32_t), &ni);
 }
 
 /* FIXME: packet_write_float and packet_write_double assume this pc is little endian */
