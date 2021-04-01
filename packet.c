@@ -127,6 +127,7 @@ bool packet_read_position(struct packet *p, int32_t *x, int16_t *y, int32_t *z) 
 
 void make_packet(struct packet *p, int id) {
 	p->packet_len = 0;
+	p->index = 0;
 	p->packet_id = id;
 	packet_write_byte(p, id);
 }
@@ -136,20 +137,22 @@ struct packet *finalize_packet(struct packet *p) {
 	if (p->packet_id == FINISHED_PACKET_ID)
 		return p;
 
-	int temp_len = p->packet_len;
-	int offset = 0;
-	while (temp_len != 0) {
-		temp_len >>= 7;
-		++offset;
+	int len = p->packet_len;
+	int packet_len_bytes = 0;
+	while (len != 0) {
+		len >>= 7;
+		++packet_len_bytes;
 	}
-	if (p->packet_len + offset > MAX_PACKET_LEN)
-		return NULL;
-	for (int i = p->packet_len + offset; i >= offset; --i)
-		p->data[i] = p->data[i-offset];
 
-	temp_len = p->packet_len;
-	p->packet_len = 0;
-	p->packet_len = temp_len + packet_write_varint(p, temp_len);
+	if (p->packet_len + packet_len_bytes > MAX_PACKET_LEN)
+		return NULL;
+
+	for (int i = p->packet_len + packet_len_bytes; i >= packet_len_bytes; --i)
+		p->data[i] = p->data[i - packet_len_bytes];
+
+	len = p->packet_len;
+	p->index = 0;
+	p->packet_len = len + packet_write_varint(p, len);
 	p->packet_id = FINISHED_PACKET_ID;
 	return p;
 }
@@ -175,7 +178,8 @@ ssize_t write_packet(int sfd, const struct packet *p) {
 void packet_write_byte(struct packet *p, uint8_t b) {
 	/* TODO: make data a pointer and realloc(3) when
 	 *       p->packet_len exceeds the buffer length */
-	p->data[p->packet_len++] = b;
+	p->data[p->index++] = b;
+	++(p->packet_len);
 }
 
 /* FIXME: hacky as fuck, assumes the pc is little-endian
@@ -188,13 +192,15 @@ void packet_write_bytes(struct packet *p, uint8_t *b, int n) {
 
 /* writes bytes without changing the byte order of the data */
 void packet_write_bytes_direct(struct packet *p, size_t len, void *data) {
-	memcpy(p->data + p->packet_len, data, len);
+	memcpy(p->data + p->index, data, len);
+	p->index += len;
 	p->packet_len += len;
 }
 
 void packet_write_short(struct packet *p, int16_t s) {
 	uint16_t ns = htons(s);
-	memcpy(p->data + p->packet_len, &ns, sizeof(uint16_t));
+	memcpy(p->data + p->index, &ns, sizeof(uint16_t));
+	p->index += sizeof(uint16_t);
 	p->packet_len += sizeof(uint16_t);
 }
 
@@ -222,7 +228,8 @@ void packet_write_string(struct packet *p, int len, const char s[]) {
 
 void packet_write_int(struct packet *p, int32_t i) {
 	uint32_t ni = htonl(i);
-	memcpy(p->data + p->packet_len, &ni, 4);
+	memcpy(p->data + p->index, &ni, 4);
+	p->index += 4;
 	p->packet_len += 4;
 }
 
