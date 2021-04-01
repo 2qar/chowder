@@ -7,7 +7,7 @@
 
 #include "packet.h"
 
-/* TODO maybe have send + recv packets in the conn
+/* TODO maybe have packets in the conn
  *      to avoid making one in every protocol function */
 struct conn {
 	int _sfd;
@@ -18,7 +18,7 @@ struct conn {
 
 int conn_init(struct conn *, int, const uint8_t[16]);
 void conn_finish(struct conn *);
-int conn_packet_read_header(struct conn *, struct recv_packet *);
-ssize_t conn_write_packet(struct conn *, const struct send_packet *);
+int conn_packet_read_header(struct conn *, struct packet *);
+ssize_t conn_write_packet(struct conn *, const struct packet *);
 
 #endif

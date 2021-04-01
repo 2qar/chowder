@@ -18,7 +18,7 @@
 
 int handle_server_list_ping(int sfd) {
 	/* handle the empty request packet */
-	struct recv_packet p = {0};
+	struct packet p = {0};
 	packet_read_header(&p, sfd);
 
 	if (server_list_ping(sfd) < 0)

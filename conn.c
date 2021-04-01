@@ -39,42 +39,42 @@ bool read_encrypted_byte(void *src, uint8_t *b) {
 	return true;
 }
 
-int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
+int parse_encrypted_packet(struct conn *c, struct packet *p) {
 	/* TODO: just recv() 5 bytes w/ MSG_PEEK into a packet buf
 	 *       instead of calling read()'ing individual bytes like
 	 *       read_encrypted_byte() does */
-	int packet_len_bytes = read_varint_gen(read_encrypted_byte, (void *) c, &(p->_packet_len));
+	int packet_len_bytes = read_varint_gen(read_encrypted_byte, (void *) c, &(p->packet_len));
 	if (packet_len_bytes < 0) {
 		fprintf(stderr, "error reading packet length\n");
 		return packet_len_bytes;
 	}
 
-	uint8_t in[p->_packet_len];
-	if (read(c->_sfd, in, p->_packet_len) < 0) {
+	uint8_t in[p->packet_len];
+	if (read(c->_sfd, in, p->packet_len) < 0) {
 		perror("read");
 		return -1;
 	}
 	int outl = MAX_PACKET_LEN;
-	int result = EVP_CipherUpdate(c->_decrypt_ctx, p->_data, &outl, in, p->_packet_len);
+	int result = EVP_CipherUpdate(c->_decrypt_ctx, p->data, &outl, in, p->packet_len);
 	if (result == 0) {
 		/* TODO: report openssl errors here and in write_encrypted_packet */
 		fprintf(stderr, "decrypt error\n");
 		return -1;
 	}
 
-	p->_index = 0;
+	p->index = 0;
 	if (packet_read_varint(p, &(p->packet_id)) < 0) {
 		fprintf(stderr, "error reading packet id\n");
 		return -1;
 	}
 
-	return p->_packet_len;
+	return p->packet_len;
 }
 
-ssize_t write_encrypted_packet(struct conn *c, const struct send_packet *p) {
-	int out_len = p->_packet_len + EVP_CIPHER_CTX_block_size(c->_encrypt_ctx);
+ssize_t write_encrypted_packet(struct conn *c, const struct packet *p) {
+	int out_len = p->packet_len + EVP_CIPHER_CTX_block_size(c->_encrypt_ctx);
 	uint8_t out[out_len];
-	if (!EVP_CipherUpdate(c->_encrypt_ctx, out, &out_len, p->_data, p->_packet_len)) {
+	if (!EVP_CipherUpdate(c->_encrypt_ctx, out, &out_len, p->data, p->packet_len)) {
 		fprintf(stderr, "encrypt error\n");
 		return -1;
 	}
@@ -82,13 +82,13 @@ ssize_t write_encrypted_packet(struct conn *c, const struct send_packet *p) {
 	return write_packet_data(c->_sfd, out, out_len);
 }
 
-int conn_packet_read_header(struct conn *c, struct recv_packet *p) {
+int conn_packet_read_header(struct conn *c, struct packet *p) {
 	if (c->_decrypt_ctx != NULL)
 		return parse_encrypted_packet(c, p);
 	return packet_read_header(p, c->_sfd);
 }
 
-ssize_t conn_write_packet(struct conn *c, const struct send_packet *p) {
+ssize_t conn_write_packet(struct conn *c, const struct packet *p) {
 	if (c->_encrypt_ctx != NULL)
 		return write_encrypted_packet(c, p);
 	return write_packet(c->_sfd, p);

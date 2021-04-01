@@ -215,7 +215,7 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 
 	puts("sent all of the shit, just waiting on a teleport confirm");
 
-	struct recv_packet p = {0};
+	struct packet p = {0};
 	struct pollfd pfd = { .fd = conn, .events = POLLIN };
 
 	uint64_t keep_alive_id;

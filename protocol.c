@@ -13,7 +13,7 @@
 #include "nbt.h"
 
 int handshake(int sfd) {
-	struct recv_packet *p = malloc(sizeof(struct recv_packet));
+	struct packet *p = malloc(sizeof(struct packet));
 	if (packet_read_header(p, sfd) < 0)
 		// TODO: maybe use more than -1 for error values
 		//       so they make sense instead of all being -1
@@ -42,7 +42,7 @@ int handshake(int sfd) {
 }
 
 int server_list_ping(int sfd) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x00);
 
 	const int json_len = 1000;
@@ -62,7 +62,7 @@ int server_list_ping(int sfd) {
 }
 
 int login_start(int sfd, char username[]) {
-	struct recv_packet *p = malloc(sizeof(struct recv_packet));
+	struct packet *p = malloc(sizeof(struct packet));
 	if (packet_read_header(p, sfd) < 0)
 		return -1;
 	int len = packet_read_string(p, 17, username);
@@ -77,7 +77,7 @@ int login_start(int sfd, char username[]) {
 }
 
 int encryption_request(int sfd, size_t der_len, const unsigned char *der, uint8_t verify[4]) {
-	struct send_packet *p = malloc(sizeof(struct send_packet));
+	struct packet *p = malloc(sizeof(struct packet));
 	make_packet(p, 0x01);
 
 	char server_id[20];
@@ -100,7 +100,7 @@ int encryption_request(int sfd, size_t der_len, const unsigned char *der, uint8_
 	return b;
 }
 
-int decrypt_byte_array(struct recv_packet *p, EVP_PKEY_CTX *ctx, size_t len, uint8_t *out) {
+int decrypt_byte_array(struct packet *p, EVP_PKEY_CTX *ctx, size_t len, uint8_t *out) {
 	int bytes;
 	if (packet_read_varint(p, &bytes) < 0 || bytes != 128) {
 		return -1;
@@ -121,7 +121,7 @@ int decrypt_byte_array(struct recv_packet *p, EVP_PKEY_CTX *ctx, size_t len, uin
 }
 
 int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uint8_t secret[16]) {
-	struct recv_packet *p = malloc(sizeof(struct recv_packet));
+	struct packet *p = malloc(sizeof(struct packet));
 	if (packet_read_header(p, sfd) < 0)
 		return -1;
 
@@ -154,7 +154,7 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uin
 }
 
 int login_success(struct conn *c, const char uuid[36], const char username[16]) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x02);
 	packet_write_string(&p, 36, uuid);
 	packet_write_string(&p, 16, username);
@@ -162,7 +162,7 @@ int login_success(struct conn *c, const char uuid[36], const char username[16]) 
 }
 
 int ping(int sfd, uint8_t l[8]) {
-	struct recv_packet p = {0};
+	struct packet p = {0};
 	if (packet_read_header(&p, sfd) < 0)
 		return -1;
 
@@ -176,7 +176,7 @@ int ping(int sfd, uint8_t l[8]) {
 }
 
 int pong(int sfd, uint8_t l[8]) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x01);
 
 	for (int i = 0; i < 8; ++i)
@@ -185,7 +185,7 @@ int pong(int sfd, uint8_t l[8]) {
 }
 
 int join_game(struct conn *c) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x26);
 
 	/* TODO: keep track of EID for each player */
@@ -217,7 +217,7 @@ int join_game(struct conn *c) {
 }
 
 int client_settings(struct conn *c) {
-	struct recv_packet p = {0};
+	struct packet p = {0};
 	if (conn_packet_read_header(c, &p) < 0)
 		return -1;
 
@@ -256,7 +256,7 @@ int client_settings(struct conn *c) {
 }
 
 int window_items(struct conn *c) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x15);
 
 	/* window ID */
@@ -269,7 +269,7 @@ int window_items(struct conn *c) {
 }
 
 int held_item_change_clientbound(struct conn *c, uint8_t slot) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x40);
 
 	packet_write_byte(&p, slot);
@@ -277,7 +277,7 @@ int held_item_change_clientbound(struct conn *c, uint8_t slot) {
 }
 
 int spawn_position(struct conn *c, uint16_t x, uint16_t y, uint16_t z) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x4E);
 
 	/* https://wiki.vg/Protocol#Position */
@@ -291,7 +291,7 @@ bool is_air(int blockstate) {
 	return blockstate == 0 || blockstate == 9129 || blockstate == 9130;
 }
 
-size_t write_section_to_packet(const struct section *s, struct send_packet *p) {
+size_t write_section_to_packet(const struct section *s, struct packet *p) {
 	if (s->bits_per_block == -1)
 		return 0;
 
@@ -319,11 +319,11 @@ size_t write_section_to_packet(const struct section *s, struct send_packet *p) {
 	for (size_t b = 0; b < blockstates_len; ++b)
 		packet_write_long(p, s->blockstates[b]);
 
-	return p->_packet_len;
+	return p->packet_len;
 }
 
 int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool full) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x22);
 
 	packet_write_int(&p, x);
@@ -366,15 +366,15 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	 *    [0]: https://wiki.vg/Chunk_Format#Chunk_Section_structure
 	 */
 	size_t data_len = 0;
-	struct send_packet *block_data = calloc(chunk->sections_len, sizeof(struct send_packet));
+	struct packet *block_data = calloc(chunk->sections_len, sizeof(struct packet));
 	for (int i = 1; i < chunk->sections_len; ++i)
 		data_len += write_section_to_packet(chunk->sections[i], &(block_data[i]));
 
 	/* write sections from before */
 	packet_write_varint(&p, data_len);
 	for (int s = 0; s < chunk->sections_len; ++s)
-		for (unsigned int i = 0; i < block_data[s]._packet_len; ++i)
-			packet_write_byte(&p, block_data[s]._data[i]);
+		for (int i = 0; i < block_data[s].packet_len; ++i)
+			packet_write_byte(&p, block_data[s].data[i]);
 	free(block_data);
 
 	/* # of block entities */
@@ -385,7 +385,7 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 }
 
 int player_position_look(struct conn *c, int *server_teleport_id) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x36);
 
 	double x = 0;
@@ -410,7 +410,7 @@ int player_position_look(struct conn *c, int *server_teleport_id) {
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
-int teleport_confirm(struct recv_packet *p, int server_teleport_id) {
+int teleport_confirm(struct packet *p, int server_teleport_id) {
 	int teleport_id;
 	if (packet_read_varint(p, &teleport_id) < 0) {
 		fprintf(stderr, "reading teleport id failed\n");
@@ -424,7 +424,7 @@ int teleport_confirm(struct recv_packet *p, int server_teleport_id) {
 }
 
 int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id) {
-	struct send_packet p = {0};
+	struct packet p = {0};
 	make_packet(&p, 0x21);
 
 	*id = rand();
@@ -434,7 +434,7 @@ int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id) {
 	return conn_write_packet(c, finalize_packet(&p));
 }
 
-int keep_alive_serverbound(struct recv_packet *p, uint64_t id) {
+int keep_alive_serverbound(struct packet *p, uint64_t id) {
 	uint64_t client_id;
 	if (!packet_read_long(p, &client_id)) {
 		return -1;
@@ -446,7 +446,7 @@ int keep_alive_serverbound(struct recv_packet *p, uint64_t id) {
 	return 0;
 }
 
-int player_block_placement(struct recv_packet *p, struct world *w) {
+int player_block_placement(struct packet *p, struct world *w) {
 	int hand;
 	if (packet_read_varint(p, &hand) < 0)
 		return -1;
@@ -487,7 +487,7 @@ int player_block_placement(struct recv_packet *p, struct world *w) {
 	printf("INFO: read pos (%d,%d,%d)\n", x, y, z);
 
 	/* TODO: implement read_float() for cursor pos x,y,z */
-	p->_index += 12;
+	p->index += 12;
 
 	uint8_t head_in_block;
 	if (!packet_read_byte(p, &head_in_block))
