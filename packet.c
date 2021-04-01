@@ -147,8 +147,7 @@ struct packet *finalize_packet(struct packet *p) {
 	if (p->packet_len + packet_len_bytes > MAX_PACKET_LEN)
 		return NULL;
 
-	for (int i = p->packet_len + packet_len_bytes; i >= packet_len_bytes; --i)
-		p->data[i] = p->data[i - packet_len_bytes];
+	memmove(p->data + packet_len_bytes, p->data, p->packet_len);
 
 	len = p->packet_len;
 	p->index = 0;
