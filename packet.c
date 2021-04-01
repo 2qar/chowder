@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <endian.h>
 
 #include "packet.h"
 
@@ -181,16 +182,8 @@ void packet_write_byte(struct packet *p, uint8_t b) {
 	++(p->packet_len);
 }
 
-/* FIXME: hacky as fuck, assumes the pc is little-endian
- *        and relies on casting other types to uint8_t *
- */
-void packet_write_bytes(struct packet *p, uint8_t *b, int n) {
-	for (int i = n - 1; i >= 0; --i)
-		packet_write_byte(p, b[i]);
-}
-
 /* writes bytes without changing the byte order of the data */
-void packet_write_bytes_direct(struct packet *p, size_t len, void *data) {
+void packet_write_bytes(struct packet *p, size_t len, void *data) {
 	memcpy(p->data + p->index, data, len);
 	p->index += len;
 	p->packet_len += len;
@@ -198,7 +191,7 @@ void packet_write_bytes_direct(struct packet *p, size_t len, void *data) {
 
 void packet_write_short(struct packet *p, int16_t s) {
 	uint16_t ns = htons(s);
-	packet_write_bytes_direct(p, sizeof(uint16_t), &ns);
+	packet_write_bytes(p, sizeof(uint16_t), &ns);
 }
 
 int packet_write_varint(struct packet *p, int i) {
@@ -225,24 +218,28 @@ void packet_write_string(struct packet *p, int len, const char s[]) {
 
 void packet_write_int(struct packet *p, int32_t i) {
 	uint32_t ni = htonl(i);
-	packet_write_bytes_direct(p, sizeof(uint32_t), &ni);
+	packet_write_bytes(p, sizeof(uint32_t), &ni);
 }
 
-/* FIXME: packet_write_float and packet_write_double assume this pc is little endian */
 void packet_write_float(struct packet *p, float f) {
-	packet_write_bytes(p, (uint8_t *) &f, sizeof(float));
+	int32_t i;
+	memcpy(&i, &f, sizeof(float));
+	packet_write_int(p, i);
 }
 
 void packet_write_double(struct packet *p, double d) {
-	packet_write_bytes(p, (uint8_t *) &d, sizeof(double));
+	int64_t i;
+	memcpy(&i, &d, sizeof(double));
+	packet_write_long(p, i);
 }
 
 void packet_write_long(struct packet *p, uint64_t l) {
-	packet_write_bytes(p, (uint8_t *) &l, sizeof(uint64_t));
+	uint64_t nl = htobe64(l);
+	packet_write_bytes(p, sizeof(uint64_t), &nl);
 }
 
 void packet_write_nbt(struct packet *p, struct nbt *n) {
 	uint8_t *ndata;
 	size_t n_len = nbt_pack(n, &ndata);
-	packet_write_bytes_direct(p, n_len, ndata);
+	packet_write_bytes(p, n_len, ndata);
 }

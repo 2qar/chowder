@@ -45,7 +45,7 @@ struct packet *finalize_packet(struct packet *);
 ssize_t write_packet_data(int, const uint8_t data[], size_t len);
 ssize_t write_packet(int, const struct packet *);
 void packet_write_byte(struct packet *, uint8_t);
-void packet_write_bytes_direct(struct packet *, size_t len, void *);
+void packet_write_bytes(struct packet *, size_t len, void *);
 void packet_write_short(struct packet *, int16_t);
 int packet_write_varint(struct packet *, int);
 void packet_write_string(struct packet *, int, const char[]);
