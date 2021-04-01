@@ -10,8 +10,8 @@
 
 #define FINISHED_PACKET_ID 255
 
-bool packet_read_byte(void *p, uint8_t *b) {
-	return read_byte((struct recv_packet *) p, b);
+bool packet_buf_read_byte(void *p, uint8_t *b) {
+	return packet_read_byte((struct recv_packet *) p, b);
 }
 
 bool sfd_read_byte(void *sfd, uint8_t *b) {
@@ -46,7 +46,7 @@ int read_varint_sfd(int sfd, int *v) {
 	return read_varint_gen(sfd_read_byte, (void *)(&sfd), v);
 }
 
-int parse_packet(struct recv_packet *p, int sfd) {
+int packet_read_header(struct recv_packet *p, int sfd) {
 	if (read_varint_sfd(sfd, &(p->_packet_len)) < 0)
 		return p->_packet_len;
 	int id_len;
@@ -62,7 +62,7 @@ int parse_packet(struct recv_packet *p, int sfd) {
 	return n;
 }
 
-bool read_byte(struct recv_packet *p, uint8_t *b) {
+bool packet_read_byte(struct recv_packet *p, uint8_t *b) {
 	if (p->_index + 1 == MAX_PACKET_LEN)
 		return false;
 
@@ -70,17 +70,17 @@ bool read_byte(struct recv_packet *p, uint8_t *b) {
 	return true;
 }
 
-int read_varint(struct recv_packet *p, int *v) {
-	return read_varint_gen(&packet_read_byte, (void *) p, v);
+int packet_read_varint(struct recv_packet *p, int *v) {
+	return read_varint_gen(&packet_buf_read_byte, (void *) p, v);
 }
 
-int read_string(struct recv_packet *p, int buf_len, char *buf) {
+int packet_read_string(struct recv_packet *p, int buf_len, char *buf) {
 	int len;
-	if (read_varint(p, &len) < 0)
+	if (packet_read_varint(p, &len) < 0)
 		return len;
 
 	int i = 0;
-	while (i < buf_len && i < len && read_byte(p, (uint8_t *) &(buf[i])))
+	while (i < buf_len && i < len && packet_read_byte(p, (uint8_t *) &(buf[i])))
 		++i;
 
 	if (i != len)
@@ -90,22 +90,22 @@ int read_string(struct recv_packet *p, int buf_len, char *buf) {
 	return i;
 }
 
-bool read_ushort(struct recv_packet *p, uint16_t *s) {
+bool packet_read_short(struct recv_packet *p, uint16_t *s) {
 	uint8_t b;
-	if (!read_byte(p, &b))
+	if (!packet_read_byte(p, &b))
 		return false;
 	*s = ((uint16_t) b) << 8;
-	if (!read_byte(p, &b))
+	if (!packet_read_byte(p, &b))
 		return false;
 	*s += b;
 	return true;
 }
 
-bool read_long(struct recv_packet *p, uint64_t *l) {
+bool packet_read_long(struct recv_packet *p, uint64_t *l) {
 	uint64_t hl = 0;
 	int i = 7;
 	uint8_t b;
-	while (i >= 0 && read_byte(p, &b)) {
+	while (i >= 0 && packet_read_byte(p, &b)) {
 		hl |= ((uint64_t) b) << (i * 8);
 		--i;
 	}
@@ -118,9 +118,9 @@ bool read_long(struct recv_packet *p, uint64_t *l) {
 
 /* TODO: test w/ negative values if i ever get around to sending chunks w/
  *       negative coordinates xd */
-bool read_position(struct recv_packet *p, int32_t *x, int16_t *y, int32_t *z) {
+bool packet_read_position(struct recv_packet *p, int32_t *x, int16_t *y, int32_t *z) {
 	uint64_t l;
-	if (!read_long(p, &l))
+	if (!packet_read_long(p, &l))
 		return false;
 
 	*x = l >> 38;
@@ -132,7 +132,7 @@ bool read_position(struct recv_packet *p, int32_t *x, int16_t *y, int32_t *z) {
 void make_packet(struct send_packet *p, int id) {
 	p->_packet_len = 0;
 	p->_packet_id = id;
-	write_byte(p, id);
+	packet_write_byte(p, id);
 }
 
 /* insert packet ID + length at the start of the packet's data buffer. */
@@ -153,7 +153,7 @@ struct send_packet *finalize_packet(struct send_packet *p) {
 
 	temp_len = p->_packet_len;
 	p->_packet_len = 0;
-	p->_packet_len = temp_len + write_varint(p, temp_len);
+	p->_packet_len = temp_len + packet_write_varint(p, temp_len);
 	p->_packet_id = FINISHED_PACKET_ID;
 	return p;
 }
@@ -176,7 +176,7 @@ ssize_t write_packet(int sfd, const struct send_packet *p) {
 	return write_packet_data(sfd, p->_data, p->_packet_len);
 }
 
-void write_byte(struct send_packet *p, uint8_t b) {
+void packet_write_byte(struct send_packet *p, uint8_t b) {
 	/* TODO: make _data a pointer and realloc(3) when
 	 *       p->_packet_len exceeds the buffer length */
 	p->_data[p->_packet_len++] = b;
@@ -185,24 +185,24 @@ void write_byte(struct send_packet *p, uint8_t b) {
 /* FIXME: hacky as fuck, assumes the pc is little-endian
  *        and relies on casting other types to uint8_t *
  */
-void write_bytes(struct send_packet *p, uint8_t *b, int n) {
+void packet_write_bytes(struct send_packet *p, uint8_t *b, int n) {
 	for (int i = n - 1; i >= 0; --i)
-		write_byte(p, b[i]);
+		packet_write_byte(p, b[i]);
 }
 
 /* writes bytes without changing the byte order of the data */
-void write_bytes_direct(struct send_packet *p, size_t len, void *data) {
+void packet_write_bytes_direct(struct send_packet *p, size_t len, void *data) {
 	memcpy(p->_data + p->_packet_len, data, len);
 	p->_packet_len += len;
 }
 
-void write_short(struct send_packet *p, int16_t s) {
+void packet_write_short(struct send_packet *p, int16_t s) {
 	uint16_t ns = htons(s);
 	memcpy(p->_data + p->_packet_len, &ns, sizeof(uint16_t));
 	p->_packet_len += sizeof(uint16_t);
 }
 
-int write_varint(struct send_packet *p, int i) {
+int packet_write_varint(struct send_packet *p, int i) {
 	uint8_t temp;
 	int n = 0;
 	do {
@@ -211,40 +211,40 @@ int write_varint(struct send_packet *p, int i) {
 		if (i != 0) {
 			temp |= 0x80;
 		}
-		write_byte(p, temp);
+		packet_write_byte(p, temp);
 		++n;
 	} while (i != 0);
 	return n;
 }
 
-void write_string(struct send_packet *p, int len, const char s[]) {
-	write_varint(p, len);
+void packet_write_string(struct send_packet *p, int len, const char s[]) {
+	packet_write_varint(p, len);
 	for (int i = 0; i < len; ++i) {
-		write_byte(p, s[i]);
+		packet_write_byte(p, s[i]);
 	}
 }
 
-void write_int(struct send_packet *p, int32_t i) {
+void packet_write_int(struct send_packet *p, int32_t i) {
 	uint32_t ni = htonl(i);
 	memcpy(p->_data + p->_packet_len, &ni, 4);
 	p->_packet_len += 4;
 }
 
-/* FIXME: write_float and write_double assume this pc is little endian */
-void write_float(struct send_packet *p, float f) {
-	write_bytes(p, (uint8_t *) &f, sizeof(float));
+/* FIXME: packet_write_float and packet_write_double assume this pc is little endian */
+void packet_write_float(struct send_packet *p, float f) {
+	packet_write_bytes(p, (uint8_t *) &f, sizeof(float));
 }
 
-void write_double(struct send_packet *p, double d) {
-	write_bytes(p, (uint8_t *) &d, sizeof(double));
+void packet_write_double(struct send_packet *p, double d) {
+	packet_write_bytes(p, (uint8_t *) &d, sizeof(double));
 }
 
-void write_long(struct send_packet *p, uint64_t l) {
-	write_bytes(p, (uint8_t *) &l, sizeof(uint64_t));
+void packet_write_long(struct send_packet *p, uint64_t l) {
+	packet_write_bytes(p, (uint8_t *) &l, sizeof(uint64_t));
 }
 
-void write_nbt(struct send_packet *p, struct nbt *n) {
+void packet_write_nbt(struct send_packet *p, struct nbt *n) {
 	uint8_t *n_data;
 	size_t n_len = nbt_pack(n, &n_data);
-	write_bytes_direct(p, n_len, n_data);
+	packet_write_bytes_direct(p, n_len, n_data);
 }

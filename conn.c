@@ -63,7 +63,7 @@ int parse_encrypted_packet(struct conn *c, struct recv_packet *p) {
 	}
 
 	p->_index = 0;
-	if (read_varint(p, &(p->packet_id)) < 0) {
+	if (packet_read_varint(p, &(p->packet_id)) < 0) {
 		fprintf(stderr, "error reading packet id\n");
 		return -1;
 	}
@@ -82,10 +82,10 @@ ssize_t write_encrypted_packet(struct conn *c, const struct send_packet *p) {
 	return write_packet_data(c->_sfd, out, out_len);
 }
 
-int conn_parse_packet(struct conn *c, struct recv_packet *p) {
+int conn_packet_read_header(struct conn *c, struct recv_packet *p) {
 	if (c->_decrypt_ctx != NULL)
 		return parse_encrypted_packet(c, p);
-	return parse_packet(p, c->_sfd);
+	return packet_read_header(p, c->_sfd);
 }
 
 ssize_t conn_write_packet(struct conn *c, const struct send_packet *p) {

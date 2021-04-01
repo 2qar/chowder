@@ -224,7 +224,7 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 	for (;;) {
 		int polled = poll(&pfd, 1, 100);
 		if (polled > 0 && (pfd.revents & POLLIN)) {
-			int result = conn_parse_packet(&c, &p);
+			int result = conn_packet_read_header(&c, &p);
 			if (result < 0) {
 				if (result == ERR_CONN_CLOSED)
 					puts("client closed connection");
