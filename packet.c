@@ -32,7 +32,7 @@ int read_varint_gen(read_byte_func rb, void *src, int *v) {
 	uint8_t b;
 	do {
 		if (!rb(src, &b))
-			return b;
+			return (int8_t) b;
 		*v |= ((((int32_t) b) & 0x7f) << (7 * n++));
 	} while ((b & 0x80) != 0);
 
