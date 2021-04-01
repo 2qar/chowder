@@ -7,6 +7,8 @@
 
 #include "nbt.h"
 
+#define PACKET_VARINT_TOO_LONG -2
+
 typedef bool (*read_byte_func)(void *src, uint8_t *b);
 
 /* returns true if reading was successful, otherwise returns false

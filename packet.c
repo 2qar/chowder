@@ -31,11 +31,10 @@ int read_varint_gen(read_byte_func rb, void *src, int *v) {
 		if (!rb(src, &b))
 			return (int8_t) b;
 		*v |= ((((int32_t) b) & 0x7f) << (7 * n++));
-	} while ((b & 0x80) != 0);
+	} while ((b & 0x80) != 0 && n <= 5);
 
-	/* FIXME: check that only 5 bytes are read, because that's the max len
-	 *        https://wiki.vg/Protocol#VarInt_and_VarLong */
-
+	if (n > 5)
+		return PACKET_VARINT_TOO_LONG;
 	return n;
 }
 
