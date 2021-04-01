@@ -225,11 +225,11 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 		int polled = poll(&pfd, 1, 100);
 		if (polled > 0 && (pfd.revents & POLLIN)) {
 			int result = conn_packet_read_header(&c, &p);
-			if (result < 0) {
-				if (result == ERR_CONN_CLOSED)
-					puts("client closed connection");
-				else
-					fprintf(stderr, "error parsing packet\n");
+			if (result == 0) {
+				puts("client closed connection");
+				break;
+			} else if (result < 0) {
+				fprintf(stderr, "error parsing packet\n");
 				break;
 			}
 			switch (p.packet_id) {

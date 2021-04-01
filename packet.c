@@ -16,11 +16,8 @@ bool packet_buf_read_byte(void *p, uint8_t *b) {
 
 bool sfd_read_byte(void *sfd, uint8_t *b) {
 	int n = read(*((int *) sfd), b, 1);
-	if (n == -1) {
-		*b = ERR_BAD_READ;
-		return false;
-	} else if (n == 0) {
-		*b = ERR_CONN_CLOSED;
+	if (n <= 0) {
+		*b = n;
 		return false;
 	}
 	return true;

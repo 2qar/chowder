@@ -7,11 +7,10 @@
 
 #include "nbt.h"
 
-#define ERR_CONN_CLOSED    -2
-#define ERR_BAD_READ       -3
-
 typedef bool (*read_byte_func)(void *src, uint8_t *b);
 
+/* returns true if reading was successful, otherwise returns false
+ * and writes the return value of read() to the given byte */
 bool sfd_read_byte(void *sfd, uint8_t *);
 int read_varint_gen(read_byte_func, void *src, int *v);
 
