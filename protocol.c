@@ -12,38 +12,35 @@
 #include "world.h"
 #include "nbt.h"
 
-int handshake(int sfd) {
-	struct packet *p = malloc(sizeof(struct packet));
-	if (packet_read_header(p, sfd) < 0)
+int handshake(struct conn *c) {
+	if (conn_packet_read_header(c) < 0)
 		// TODO: maybe use more than -1 for error values
 		//       so they make sense instead of all being -1
 		return -1;
 
 	int protocol_version;
-	if (packet_read_varint(p, &protocol_version) < 0)
+	if (packet_read_varint(c->packet, &protocol_version) < 0)
 		return -1;
 	
 	char ip[1000];
-	if (packet_read_string(p, 1000, ip) < 0) {
+	if (packet_read_string(c->packet, 1000, ip) < 0) {
 		return -1;
 	}
 
 	uint16_t port;
-	if (!packet_read_short(p, &port)) {
+	if (!packet_read_short(c->packet, &port)) {
 		return -1;
 	}
 
 	int next_state;
-	if (packet_read_varint(p, &next_state) < 0)
+	if (packet_read_varint(c->packet, &next_state) < 0)
 		return -1;
 
-	free(p);
 	return next_state;
 }
 
-int server_list_ping(int sfd) {
-	struct packet p = {0};
-	make_packet(&p, 0x00);
+int server_list_ping(struct conn *c) {
+	make_packet(c->packet, 0x00);
 
 	const int json_len = 1000;
 	char *json = malloc(sizeof(char) * json_len);
@@ -55,49 +52,46 @@ int server_list_ping(int sfd) {
 		fprintf(stderr, "attempted to write %d bytes to JSON buffer, consider increasing length\n", n);
 		return -1;
 	}
-	packet_write_string(&p, n, json);
+	packet_write_string(c->packet, n, json);
 	free(json);
 
-	return write_packet(sfd, finalize_packet(&p));
+	return conn_write_packet(c);
 }
 
-int login_start(int sfd, char username[]) {
-	struct packet *p = malloc(sizeof(struct packet));
-	if (packet_read_header(p, sfd) < 0)
+int login_start(struct conn *c, char username[]) {
+	if (conn_packet_read_header(c) < 0)
 		return -1;
-	int len = packet_read_string(p, 17, username);
+	int len = packet_read_string(c->packet, 17, username);
 	if (len < 0) {
 		return -1;
 	} else if (len > 16) {
 		fprintf(stderr, "login_start: expected username to be 16 characters, got %d\n", len);
 		return -1;
 	}
-	free(p);
 	return 0;
 }
 
-int encryption_request(int sfd, size_t der_len, const unsigned char *der, uint8_t verify[4]) {
-	struct packet *p = malloc(sizeof(struct packet));
-	make_packet(p, 0x01);
+int encryption_request(struct conn *c, size_t der_len, const unsigned char *der, uint8_t verify[4]) {
+	make_packet(c->packet, 0x01);
 
 	char server_id[20];
 	memset(server_id, ' ', 20);
-	packet_write_string(p, 20, server_id);
+	packet_write_string(c->packet, 20, server_id);
 
-	packet_write_varint(p, der_len);
+	packet_write_varint(c->packet, der_len);
 	for (size_t i = 0; i < der_len; ++i)
-		packet_write_byte(p, der[i]);
+		packet_write_byte(c->packet, der[i]);
 
 	/* verify token */
-	packet_write_varint(p, 4);
+	packet_write_varint(c->packet, 4);
 	for (int i = 0; i < 4; ++i) {
-		packet_write_byte(p, (verify[i] = (rand() % 255)));
+		packet_write_byte(c->packet, (verify[i] = (rand() % 255)));
 	}
 
-	// TODO: take packet pointer to write to and return b so caller can write to socket themselves
-	int b = write_packet(sfd, finalize_packet(p));
-	free(p);
-	return b;
+	/* TODO: maybe make the caller call conn_write_packet() and handle the
+	 *       errors there so it doesn't get mixed in w/ all the other errors
+	 *       these functions can return */
+	return conn_write_packet(c);
 }
 
 int decrypt_byte_array(struct packet *p, EVP_PKEY_CTX *ctx, size_t len, uint8_t *out) {
@@ -120,14 +114,13 @@ int decrypt_byte_array(struct packet *p, EVP_PKEY_CTX *ctx, size_t len, uint8_t 
 	return n;
 }
 
-int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uint8_t secret[16]) {
-	struct packet *p = malloc(sizeof(struct packet));
-	if (packet_read_header(p, sfd) < 0)
+int encryption_response(struct conn *c, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uint8_t secret[16]) {
+	if (conn_packet_read_header(c) < 0)
 		return -1;
 
 	const size_t buf_len = 1000;
 	uint8_t *buf = malloc(sizeof(uint8_t) * buf_len);
-	if (decrypt_byte_array(p, ctx, buf_len, buf) < 0) {
+	if (decrypt_byte_array(c->packet, ctx, buf_len, buf) < 0) {
 		return -1;
 	}
 	for (int i = 0; i < 16; ++i) {
@@ -135,7 +128,7 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uin
 	}
 
 	/* read client verify */
-	if (decrypt_byte_array(p, ctx, buf_len, buf) < 0) {
+	if (decrypt_byte_array(c->packet, ctx, buf_len, buf) < 0) {
 		return -1;
 	}
 	/* verify the verifys */
@@ -149,25 +142,22 @@ int encryption_response(int sfd, EVP_PKEY_CTX *ctx, const uint8_t verify[4], uin
 	}
 
 	free(buf);
-	free(p);
 	return 0;
 }
 
 int login_success(struct conn *c, const char uuid[36], const char username[16]) {
-	struct packet p = {0};
-	make_packet(&p, 0x02);
-	packet_write_string(&p, 36, uuid);
-	packet_write_string(&p, 16, username);
-	return conn_write_packet(c, finalize_packet(&p));
+	make_packet(c->packet, 0x02);
+	packet_write_string(c->packet, 36, uuid);
+	packet_write_string(c->packet, 16, username);
+	return conn_write_packet(c);
 }
 
-int ping(int sfd, uint8_t l[8]) {
-	struct packet p = {0};
-	if (packet_read_header(&p, sfd) < 0)
+int ping(struct conn *c, uint8_t l[8]) {
+	if (conn_packet_read_header(c) < 0)
 		return -1;
 
 	int i = 0;
-	while (i < 8 && packet_read_byte(&p, &(l[i])))
+	while (i < 8 && packet_read_byte(c->packet, &(l[i])))
 		++i;
 	if (i != 8)
 		return -1;
@@ -175,79 +165,78 @@ int ping(int sfd, uint8_t l[8]) {
 	return 0;
 }
 
-int pong(int sfd, uint8_t l[8]) {
-	struct packet p = {0};
-	make_packet(&p, 0x01);
+int pong(struct conn *c, uint8_t l[8]) {
+	make_packet(c->packet, 0x01);
 
 	for (int i = 0; i < 8; ++i)
-		packet_write_byte(&p, l[i]);
-	return write_packet(sfd, finalize_packet(&p));
+		packet_write_byte(c->packet, l[i]);
+	return conn_write_packet(c);
 }
 
 int join_game(struct conn *c) {
-	struct packet p = {0};
-	make_packet(&p, 0x26);
+	struct packet *p = c->packet;
+	make_packet(p, 0x26);
 
 	/* TODO: keep track of EID for each player */
-	packet_write_int(&p, 123);
+	packet_write_int(p, 123);
 	/* gamemode */
-	packet_write_byte(&p, 1);
+	packet_write_byte(p, 1);
 	/* dimension */
-	packet_write_int(&p, 0);
+	packet_write_int(p, 0);
 
 	/* TODO: pass a valid SHA-256 hash */
-	packet_write_long(&p, 0);
+	packet_write_long(p, 0);
 
 	/* max players, ignored */
-	packet_write_byte(&p, 0);
+	packet_write_byte(p, 0);
 
 	char level_type[16] = "default";
-	packet_write_string(&p, 16, level_type);
+	packet_write_string(p, 16, level_type);
 
 	/* view distance */
-	packet_write_varint(&p, 10);
+	packet_write_varint(p, 10);
 
 	/* reduced debug info */
-	packet_write_byte(&p, false);
+	packet_write_byte(p, false);
 
 	/* enable respawn screen */
-	packet_write_byte(&p, true);
+	packet_write_byte(p, true);
 
-	return conn_write_packet(c, finalize_packet(&p));
+	return conn_write_packet(c);
 }
 
 int client_settings(struct conn *c) {
-	struct packet p = {0};
-	if (conn_packet_read_header(c, &p) < 0)
+	if (conn_packet_read_header(c) < 0)
 		return -1;
+	struct packet *p = c->packet;
 
 	char locale[17] = {0};
-	if (packet_read_string(&p, 17, locale) < 0)
+	if (packet_read_string(p, 17, locale) < 0)
 		return -1;
 	puts(locale);
 
 	uint8_t view_distance;
-	if (!packet_read_byte(&p, &view_distance))
+	if (!packet_read_byte(p, &view_distance))
 		return -1;
 	printf("view distance: %d\n", view_distance);
 
 	int chat_mode;
-	if (packet_read_varint(&p, &chat_mode) < 0)
+	if (packet_read_varint(p, &chat_mode) < 0)
 		return -1;
 	printf("chat mode: %d\n", chat_mode);
 
 	uint8_t chat_colors;
-	if (!packet_read_byte(&p, &chat_colors))
+	if (!packet_read_byte(p, &chat_colors))
 		return -1;
 	printf("chat colors: %d\n", chat_colors);
 
 	uint8_t displayed_skin;
-	if (!packet_read_byte(&p, &displayed_skin))
+	if (!packet_read_byte(p, &displayed_skin))
 		return -1;
 	printf("displayed skin shit: %d\n", displayed_skin);
 
 	int main_hand;
-	if (packet_read_varint(&p, &main_hand) < 0)
+	if (packet_read_varint(p, &main_hand) < 0)
 		return -1;
 	printf("main hand: %d\n", main_hand);
 
@@ -256,34 +245,31 @@ int client_settings(struct conn *c) {
 }
 
 int window_items(struct conn *c) {
-	struct packet p = {0};
-	make_packet(&p, 0x15);
+	make_packet(c->packet, 0x15);
 
 	/* window ID */
-	packet_write_byte(&p, 0);
+	packet_write_byte(c->packet, 0);
 	/* slot count */
-	packet_write_short(&p, 0);
+	packet_write_short(c->packet, 0);
 	/* TODO: slot array https://wiki.vg/Slot_Data */
 
-	return conn_write_packet(c, finalize_packet(&p));
+	return conn_write_packet(c);
 }
 
 int held_item_change_clientbound(struct conn *c, uint8_t slot) {
-	struct packet p = {0};
-	make_packet(&p, 0x40);
+	make_packet(c->packet, 0x40);
 
-	packet_write_byte(&p, slot);
-	return conn_write_packet(c, finalize_packet(&p));
+	packet_write_byte(c->packet, slot);
+	return conn_write_packet(c);
 }
 
 int spawn_position(struct conn *c, uint16_t x, uint16_t y, uint16_t z) {
-	struct packet p = {0};
-	make_packet(&p, 0x4E);
+	make_packet(c->packet, 0x4E);
 
 	/* https://wiki.vg/Protocol#Position */
 	uint64_t pos = (((uint64_t)x & 0x3FFFFFF) << 38) | ((z & 0x3FFFFFF) << 12) | (y & 0xFFF);
-	packet_write_long(&p, pos);
-	return conn_write_packet(c, finalize_packet(&p));
+	packet_write_long(c->packet, pos);
+	return conn_write_packet(c);
 }
 
 bool is_air(int blockstate) {
@@ -323,12 +309,12 @@ size_t write_section_to_packet(const struct section *s, struct packet *p) {
 }
 
 int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool full) {
-	struct packet p = {0};
-	make_packet(&p, 0x22);
+	struct packet *p = c->packet;
+	make_packet(p, 0x22);
 
-	packet_write_int(&p, x);
-	packet_write_int(&p, y);
-	packet_write_byte(&p, full);
+	packet_write_int(p, x);
+	packet_write_int(p, y);
+	packet_write_byte(p, full);
 
 	/* primary bit mask */
 	int section_bit_mask = 0;
@@ -336,7 +322,7 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 		int has_blocks = chunk->sections[i]->bits_per_block > 0;
 		section_bit_mask |= (has_blocks << (i - 1));
 	}
-	packet_write_varint(&p, section_bit_mask);
+	packet_write_varint(p, section_bit_mask);
 
 	/* TODO: actually calculate heightmaps */
 	struct nbt *n = nbt_new(TAG_Long_Array, "MOTION_BLOCKING");
@@ -345,18 +331,18 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	arr->len = 36;
 	arr->data.longs = heightmaps;
 	n->data.array = arr;
-	packet_write_nbt(&p, n);
+	packet_write_nbt(p, n);
 	arr->data.longs = NULL;
 	nbt_free(n);
 
 	if (full && chunk->biomes != NULL) {
 		for (int i = 0; i < BIOMES_LEN; ++i) {
-			packet_write_int(&p, chunk->biomes[i]);
+			packet_write_int(p, chunk->biomes[i]);
 		}
 	} else if (full) {
 		for (int i = 0; i < BIOMES_LEN; ++i) {
 			/* void biome */
-			packet_write_int(&p, 127);
+			packet_write_int(p, 127);
 		}
 	}
 
@@ -371,43 +357,43 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 		data_len += write_section_to_packet(chunk->sections[i], &(block_data[i]));
 
 	/* write sections from before */
-	packet_write_varint(&p, data_len);
+	packet_write_varint(p, data_len);
 	for (int s = 0; s < chunk->sections_len; ++s)
 		for (int i = 0; i < block_data[s].packet_len; ++i)
-			packet_write_byte(&p, block_data[s].data[i]);
+			packet_write_byte(p, block_data[s].data[i]);
 	free(block_data);
 
 	/* # of block entities */
 	/* TODO: implement block entities */
-	packet_write_varint(&p, 0);
+	packet_write_varint(p, 0);
 
-	return conn_write_packet(c, finalize_packet(&p));
+	return conn_write_packet(c);
 }
 
 int player_position_look(struct conn *c, int *server_teleport_id) {
-	struct packet p = {0};
-	make_packet(&p, 0x36);
+	struct packet *p = c->packet;
+	make_packet(p, 0x36);
 
 	double x = 0;
 	double y = 0;
 	double z = 0;
-	packet_write_double(&p, x);
-	packet_write_double(&p, y);
-	packet_write_double(&p, z);
+	packet_write_double(p, x);
+	packet_write_double(p, y);
+	packet_write_double(p, z);
 
 	float yaw = 0;
 	float pitch = 0;
-	packet_write_float(&p, yaw);
-	packet_write_float(&p, pitch);
+	packet_write_float(p, yaw);
+	packet_write_float(p, pitch);
 
 	uint8_t flags = 0;
-	packet_write_byte(&p, flags);
+	packet_write_byte(p, flags);
 
 	/* TODO: randomize it, probably */
 	*server_teleport_id = 123;
-	packet_write_varint(&p, *server_teleport_id);
+	packet_write_varint(p, *server_teleport_id);
 
-	return conn_write_packet(c, finalize_packet(&p));
+	return conn_write_packet(c);
 }
 
 int teleport_confirm(struct packet *p, int server_teleport_id) {
@@ -424,14 +410,13 @@ int teleport_confirm(struct packet *p, int server_teleport_id) {
 }
 
 int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id) {
-	struct packet p = {0};
-	make_packet(&p, 0x21);
+	make_packet(c->packet, 0x21);
 
 	*id = rand();
-	packet_write_long(&p, *id);
+	packet_write_long(c->packet, *id);
 	*t = time(NULL);
 
-	return conn_write_packet(c, finalize_packet(&p));
+	return conn_write_packet(c);
 }
 
 int keep_alive_serverbound(struct packet *p, uint64_t id) {

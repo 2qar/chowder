@@ -129,18 +129,22 @@ int bind_socket() {
 }
 
 
-int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der) {
-	int next_state = handshake(conn);
+int handle_connection(struct world *w, int sfd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der) {
+	struct conn conn = {0};
+	conn.sfd = sfd;
+	conn.packet = malloc(sizeof(struct packet));
+
+	int next_state = handshake(&conn);
 	if (next_state == 1) {
-		handle_server_list_ping(conn);
-		close(conn);
-		/* TODO: clean up, dummy */
+		handle_server_list_ping(&conn);
+		conn_finish(&conn);
 		return 0;
 	}
 
-	struct conn c = {0};
+	printf("next state is %d\n", next_state);
+
 	EVP_PKEY_CTX *login_decrypt_ctx = EVP_PKEY_CTX_dup(ctx);
-	int err = login(conn, &c, der, der_len, login_decrypt_ctx);
+	int err = login(&conn, der, der_len, login_decrypt_ctx);
 	if (err < 0) {
 		// TODO: return meaningful errors instead of -1 everywhere
 		fprintf(stderr, "error logging in: %d\n", err);
@@ -148,17 +152,17 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 	}
 	EVP_PKEY_CTX_free(login_decrypt_ctx);
 
-	join_game(&c);
+	join_game(&conn);
 	puts("joined the game");
-	if (client_settings(&c) < 0) {
+	if (client_settings(&conn) < 0) {
 		fprintf(stderr, "error reading client settings\n");
 		return 1;
 	}
-	if (held_item_change_clientbound(&c, 0) < 0) {
+	if (held_item_change_clientbound(&conn, 0) < 0) {
 		fprintf(stderr, "error sending held item change\n");
 		return 1;
 	}
-	if (window_items(&c) < 0) {
+	if (window_items(&conn) < 0) {
 		fprintf(stderr, "error sending window items\n");
 		return 1;
 	}
@@ -195,7 +199,7 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 			}
 
 			if (chunk != NULL) {
-				chunk_data(&c, chunk, x, z, true);
+				chunk_data(&conn, chunk, x, z, true);
 				r->chunks[z][x] = chunk;
 			}
 		}
@@ -203,20 +207,19 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 	fclose(f);
 	free(chunk_buf);
 
-	if (spawn_position(&c, 0, 0, 0) < 0) {
+	if (spawn_position(&conn, 0, 0, 0) < 0) {
 		fprintf(stderr, "error sending spawn position\n");
 		return 1;
 	}
 	int teleport_id;
-	if (player_position_look(&c, &teleport_id) < 0) {
+	if (player_position_look(&conn, &teleport_id) < 0) {
 		fprintf(stderr, "error sending position + look\n");
 		return 1;
 	}
 
 	puts("sent all of the shit, just waiting on a teleport confirm");
 
-	struct packet p = {0};
-	struct pollfd pfd = { .fd = conn, .events = POLLIN };
+	struct pollfd pfd = { .fd = sfd, .events = POLLIN };
 
 	uint64_t keep_alive_id;
 	time_t keep_alive_time = 0;
@@ -224,7 +227,7 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 	for (;;) {
 		int polled = poll(&pfd, 1, 100);
 		if (polled > 0 && (pfd.revents & POLLIN)) {
-			int result = conn_packet_read_header(&c, &p);
+			int result = conn_packet_read_header(&conn);
 			if (result == 0) {
 				puts("client closed connection");
 				break;
@@ -232,17 +235,17 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 				fprintf(stderr, "error parsing packet\n");
 				break;
 			}
-			switch (p.packet_id) {
+			switch (conn.packet->packet_id) {
 				case 0x00:
-					printf("teleport confirm: %d\n", teleport_confirm(&p, teleport_id));
+					printf("teleport confirm: %d\n", teleport_confirm(conn.packet, teleport_id));
 					break;
 				case 0x0F:
-					if (keep_alive_serverbound(&p, keep_alive_id) < 0)
+					if (keep_alive_serverbound(conn.packet, keep_alive_id) < 0)
 						break;
 					last_client_response = time(NULL);
 					break;
 				case 0x2C:
-					player_block_placement(&p, w);
+					player_block_placement(conn.packet, w);
 					break;
 				default:
 					//printf("unimplemented packet 0x%02x\n", p.packet_id);
@@ -259,13 +262,14 @@ int handle_connection(struct world *w, int conn, EVP_PKEY_CTX *ctx, size_t der_l
 		}
 
 		if (time(NULL) - keep_alive_time > 15) {
-			if (keep_alive_clientbound(&c, &keep_alive_time, &keep_alive_id) < 0) {
+			if (keep_alive_clientbound(&conn, &keep_alive_time, &keep_alive_id) < 0) {
 				fprintf(stderr, "error sending keep alive\n");
 				break;
 			}
 		}
 	}
 
-	conn_finish(&c);
+	free(conn.packet);
+	conn_finish(&conn);
 	return 0;
 }

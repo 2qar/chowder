@@ -16,18 +16,19 @@
 #include "server.h"
 #include "protocol.h"
 
-int handle_server_list_ping(int sfd) {
+int handle_server_list_ping(struct conn *c) {
 	/* handle the empty request packet */
-	struct packet p = {0};
-	packet_read_header(&p, sfd);
+	if (conn_packet_read_header(c) < 0) {
+		return -1;
+	}
 
-	if (server_list_ping(sfd) < 0)
+	if (server_list_ping(c) < 0)
 		return -1;
 
 	uint8_t l[8] = {0};
-	if (ping(sfd, l) < 0)
+	if (ping(c, l) < 0)
 		return -1;
-	return pong(sfd, l);
+	return pong(c, l);
 }
 
 char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16]) {
@@ -247,15 +248,15 @@ void uuid_bytes(char uuid[33], uint8_t bytes[16]) {
 	BN_free(bn);
 }
 
-int login(int sfd, struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len, EVP_PKEY_CTX *decrypt_ctx) {
+int login(struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len, EVP_PKEY_CTX *decrypt_ctx) {
 	char username[17];
-	if (login_start(sfd, username) < 0)
+	if (login_start(c, username) < 0)
 		return -1;
 	uint8_t verify[4];
-	if (encryption_request(sfd, pubkey_len, pubkey_der, verify) < 0)
+	if (encryption_request(c, pubkey_len, pubkey_der, verify) < 0)
 		return -1;
 	uint8_t secret[16];
-	if (encryption_response(sfd, decrypt_ctx, verify, secret) < 0)
+	if (encryption_response(c, decrypt_ctx, verify, secret) < 0)
 		return -1;
 	char *hash = mc_hash(pubkey_len, pubkey_der, secret);
 	if (!hash) {
@@ -267,7 +268,9 @@ int login(int sfd, struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len,
 		return -1;
 	free(hash);
 
-	if (conn_init(c, sfd, secret) < 0) {
+	/* FIXME: rename conn_init() -> conn_crypto_init(), and only use it to
+	 *        initialize the encrypt / decrypt contexts */
+	if (conn_init(c, c->sfd, secret) < 0) {
 		fprintf(stderr, "error initializing encryption\n");
 		return -1;
 	}
