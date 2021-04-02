@@ -27,7 +27,7 @@ bool sfd_read_byte(void *sfd, uint8_t *b) {
 int read_varint_gen(read_byte_func rb, void *src, int *v) {
 	int n = 0;
 	*v = 0;
-	uint8_t b;
+	uint8_t b = 0;
 	do {
 		if (!rb(src, &b))
 			return (int8_t) b;
