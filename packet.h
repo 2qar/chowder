@@ -18,7 +18,8 @@ int read_varint_gen(read_byte_func, void *src, int *v);
 
 /* FIXME: dynamically allocate packet data as needed
  *        instead of making huge buffers for every packet */
-#define MAX_PACKET_LEN 10000*5
+/* https://wiki.vg/Protocol#Packet_format */
+#define MAX_PACKET_LEN 2097151
 
 /* TODO: maybe enforce read / write states to avoid funky business */
 /* packets are pretty much a read/write buffer for network data.
