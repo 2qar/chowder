@@ -44,15 +44,18 @@ int read_varint_sfd(int sfd, int *v) {
 }
 
 int packet_read_header(struct packet *p, int sfd) {
-	if (read_varint_sfd(sfd, &(p->packet_len)) < 0)
-		return p->packet_len;
-	int id_len;
-	if ((id_len = read_varint_sfd(sfd, &(p->packet_id))) < 0)
-		return p->packet_id;
+	int n = read_varint_sfd(sfd, &(p->packet_len));
+	if (n <= 0) {
+		return n;
+	}
+	int id_len = read_varint_sfd(sfd, &(p->packet_id));
+	if (id_len <= 0) {
+		return n;
+	}
 
-	int n;
-	if ((n = read(sfd, p->data, p->packet_len-id_len)) <= 0) {
-		return -1;
+	n = read(sfd, p->data, p->packet_len - id_len);
+	if (n <= 0) {
+		return n;
 	}
 
 	p->index = 0;
