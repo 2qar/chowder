@@ -82,7 +82,7 @@ int packet_read_string(struct packet *p, int buf_len, char *buf) {
 		return len;
 
 	int i = 0;
-	while (i < buf_len && i < len && packet_read_byte(p, (uint8_t *) &(buf[i])))
+	while (i < buf_len - 1 && i < len && packet_read_byte(p, (uint8_t *) &(buf[i])))
 		++i;
 
 	if (i != len)
