@@ -63,8 +63,10 @@ int packet_read_header(struct packet *p, int sfd) {
 }
 
 bool packet_read_byte(struct packet *p, uint8_t *b) {
-	if (p->index + 1 == MAX_PACKET_LEN)
+	if (p->index + 1 == MAX_PACKET_LEN) {
+		*b = 0;
 		return false;
+	}
 
 	*b = p->data[p->index++];
 	return true;
