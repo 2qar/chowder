@@ -8,6 +8,7 @@
 #include "nbt.h"
 
 #define PACKET_VARINT_TOO_LONG -2
+#define PACKET_TOO_BIG         -3
 
 typedef bool (*read_byte_func)(void *src, uint8_t *b);
 
@@ -16,10 +17,10 @@ typedef bool (*read_byte_func)(void *src, uint8_t *b);
 bool sfd_read_byte(void *sfd, uint8_t *);
 int read_varint_gen(read_byte_func, void *src, int *v);
 
-/* FIXME: dynamically allocate packet data as needed
- *        instead of making huge buffers for every packet */
 /* https://wiki.vg/Protocol#Packet_format */
 #define MAX_PACKET_LEN 2097151
+/* default packet buf len + size added each time the buffer fills up */
+#define PACKET_BLOCK_SIZE 4096
 
 /* TODO: maybe enforce read / write states to avoid funky business */
 /* packets are pretty much a read/write buffer for network data.
@@ -27,9 +28,14 @@ int read_varint_gen(read_byte_func, void *src, int *v);
 struct packet {
 	int packet_id;
 	int packet_len;
-	uint8_t data[MAX_PACKET_LEN];
+	size_t data_len;
+	uint8_t *data;
 	int index;
 };
+
+/* allocates the packet's data buffer + zeroes the fields just in case */
+void packet_init(struct packet *);
+void packet_free(struct packet *);
 
 int packet_read_header(struct packet *, int sfd);
 /* packet_read_byte() and the other primitive reads (packet_read_ushort(), etc.)

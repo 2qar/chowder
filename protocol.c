@@ -353,14 +353,19 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	 */
 	size_t data_len = 0;
 	struct packet *block_data = calloc(chunk->sections_len, sizeof(struct packet));
-	for (int i = 1; i < chunk->sections_len; ++i)
+	for (int i = 1; i < chunk->sections_len; ++i) {
+		packet_init(&(block_data[i]));
 		data_len += write_section_to_packet(chunk->sections[i], &(block_data[i]));
+	}
 
 	/* write sections from before */
 	packet_write_varint(p, data_len);
-	for (int s = 0; s < chunk->sections_len; ++s)
-		for (int i = 0; i < block_data[s].packet_len; ++i)
+	for (int s = 0; s < chunk->sections_len; ++s) {
+		for (int i = 0; i < block_data[s].packet_len; ++i) {
 			packet_write_byte(p, block_data[s].data[i]);
+		}
+		free(block_data[s].data);
+	}
 	free(block_data);
 
 	/* # of block entities */

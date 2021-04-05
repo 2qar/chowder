@@ -133,6 +133,7 @@ int handle_connection(struct world *w, int sfd, EVP_PKEY_CTX *ctx, size_t der_le
 	struct conn conn = {0};
 	conn.sfd = sfd;
 	conn.packet = malloc(sizeof(struct packet));
+	packet_init(conn.packet);
 
 	int next_state = handshake(&conn);
 	if (next_state == 1) {
@@ -269,7 +270,7 @@ int handle_connection(struct world *w, int sfd, EVP_PKEY_CTX *ctx, size_t der_le
 		}
 	}
 
-	free(conn.packet);
+	packet_free(conn.packet);
 	conn_finish(&conn);
 	return 0;
 }

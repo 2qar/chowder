@@ -11,6 +11,17 @@
 
 #define FINISHED_PACKET_ID 255
 
+void packet_init(struct packet *p) {
+	memset(p, 0, sizeof(struct packet));
+	p->data_len = PACKET_BLOCK_SIZE;
+	p->data = malloc(PACKET_BLOCK_SIZE);
+}
+
+void packet_free(struct packet *p) {
+	free(p->data);
+	free(p);
+}
+
 bool packet_buf_read_byte(void *p, uint8_t *b) {
 	return packet_read_byte((struct packet *) p, b);
 }
@@ -51,6 +62,17 @@ int packet_read_header(struct packet *p, int sfd) {
 	int id_len = read_varint_sfd(sfd, &(p->packet_id));
 	if (id_len <= 0) {
 		return n;
+	}
+
+	size_t old_data_len = p->data_len;
+	while ((size_t)(p->packet_len - id_len) > p->data_len) {
+		p->data_len += PACKET_BLOCK_SIZE;
+	}
+	if (p->data_len > MAX_PACKET_LEN) {
+		return PACKET_TOO_BIG;
+	} else if (p->data_len != old_data_len) {
+		/* TODO: also check this return */
+		p->data = realloc(p->data, p->data_len);
 	}
 
 	n = read(sfd, p->data, p->packet_len - id_len);
@@ -180,15 +202,27 @@ ssize_t write_packet(int sfd, const struct packet *p) {
 	return write_packet_data(sfd, p->data, p->packet_len);
 }
 
+static void packet_try_resize(struct packet *p, size_t new_size) {
+	if (new_size >= MAX_PACKET_LEN) {
+		/* TODO: return an error instead of doing this */
+		fprintf(stderr, "wrote too many bytes to this packet! time to die\n");
+		exit(EXIT_FAILURE);
+	} else if (new_size >= p->data_len) {
+		p->data_len += PACKET_BLOCK_SIZE;
+		/* TODO: check if this fails, probably */
+		p->data = realloc(p->data, p->data_len);
+	}
+}
+
 void packet_write_byte(struct packet *p, uint8_t b) {
-	/* TODO: make data a pointer and realloc(3) when
-	 *       p->packet_len exceeds the buffer length */
+	packet_try_resize(p, p->packet_len + 1);
 	p->data[p->index++] = b;
 	++(p->packet_len);
 }
 
 /* writes bytes without changing the byte order of the data */
 void packet_write_bytes(struct packet *p, size_t len, void *data) {
+	packet_try_resize(p, p->packet_len + len);
 	memcpy(p->data + p->index, data, len);
 	p->index += len;
 	p->packet_len += len;
