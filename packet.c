@@ -71,8 +71,12 @@ int packet_read_header(struct packet *p, int sfd) {
 	if (p->data_len > MAX_PACKET_LEN) {
 		return PACKET_TOO_BIG;
 	} else if (p->data_len != old_data_len) {
-		/* TODO: also check this return */
-		p->data = realloc(p->data, p->data_len);
+		void *buf = realloc(p->data, p->data_len);
+		if (buf == NULL) {
+			return PACKET_REALLOC_FAILED;
+		} else {
+			p->data = buf;
+		}
 	}
 
 	n = read(sfd, p->data, p->packet_len - id_len);
@@ -202,35 +206,46 @@ ssize_t write_packet(int sfd, const struct packet *p) {
 	return write_packet_data(sfd, p->data, p->packet_len);
 }
 
-static void packet_try_resize(struct packet *p, size_t new_size) {
-	if (new_size >= MAX_PACKET_LEN) {
-		/* TODO: return an error instead of doing this */
-		fprintf(stderr, "wrote too many bytes to this packet! time to die\n");
-		exit(EXIT_FAILURE);
-	} else if (new_size >= p->data_len) {
+static int packet_try_resize(struct packet *p, size_t new_size) {
+	if (new_size > MAX_PACKET_LEN) {
+		return PACKET_TOO_BIG;
+	} else if (new_size > p->data_len) {
 		p->data_len += PACKET_BLOCK_SIZE;
-		/* TODO: check if this fails, probably */
-		p->data = realloc(p->data, p->data_len);
+		void *buf = realloc(p->data, p->data_len);
+		if (buf == NULL) {
+			return PACKET_REALLOC_FAILED;
+		} else {
+			p->data = buf;
+		}
 	}
+	return 0;
 }
 
-void packet_write_byte(struct packet *p, uint8_t b) {
-	packet_try_resize(p, p->packet_len + 1);
+int packet_write_byte(struct packet *p, uint8_t b) {
+	int err = packet_try_resize(p, p->packet_len + 1);
+	if (err)
+		return err;
+
 	p->data[p->index++] = b;
 	++(p->packet_len);
+	return 1;
 }
 
 /* writes bytes without changing the byte order of the data */
-void packet_write_bytes(struct packet *p, size_t len, void *data) {
-	packet_try_resize(p, p->packet_len + len);
+int packet_write_bytes(struct packet *p, size_t len, void *data) {
+	int err = packet_try_resize(p, p->packet_len + len);
+	if (err)
+		return err;
+
 	memcpy(p->data + p->index, data, len);
 	p->index += len;
 	p->packet_len += len;
+	return len;
 }
 
-void packet_write_short(struct packet *p, int16_t s) {
+int packet_write_short(struct packet *p, int16_t s) {
 	uint16_t ns = htons(s);
-	packet_write_bytes(p, sizeof(uint16_t), &ns);
+	return packet_write_bytes(p, sizeof(uint16_t), &ns);
 }
 
 int packet_write_varint(struct packet *p, int i) {
@@ -248,37 +263,49 @@ int packet_write_varint(struct packet *p, int i) {
 	return n;
 }
 
-void packet_write_string(struct packet *p, int len, const char s[]) {
-	packet_write_varint(p, len);
-	for (int i = 0; i < len; ++i) {
-		packet_write_byte(p, s[i]);
+int packet_write_string(struct packet *p, int len, const char s[]) {
+	int len_bytes = packet_write_varint(p, len);
+	if (len_bytes < 0)
+		return len_bytes;
+
+	int n_bytes = 0;
+	int i = 0;
+	int n = 1;
+	while (n == 1 && i < len) {
+		n = packet_write_byte(p, s[i++]);
+		n_bytes += n;
+	}
+	if (i != len) {
+		return n;
+	} else {
+		return len_bytes + n_bytes;
 	}
 }
 
-void packet_write_int(struct packet *p, int32_t i) {
+int packet_write_int(struct packet *p, int32_t i) {
 	uint32_t ni = htonl(i);
-	packet_write_bytes(p, sizeof(uint32_t), &ni);
+	return packet_write_bytes(p, sizeof(uint32_t), &ni);
 }
 
-void packet_write_float(struct packet *p, float f) {
+int packet_write_float(struct packet *p, float f) {
 	int32_t i;
 	memcpy(&i, &f, sizeof(float));
-	packet_write_int(p, i);
+	return packet_write_int(p, i);
 }
 
-void packet_write_double(struct packet *p, double d) {
+int packet_write_double(struct packet *p, double d) {
 	int64_t i;
 	memcpy(&i, &d, sizeof(double));
-	packet_write_long(p, i);
+	return packet_write_long(p, i);
 }
 
-void packet_write_long(struct packet *p, uint64_t l) {
+int packet_write_long(struct packet *p, uint64_t l) {
 	uint64_t nl = htobe64(l);
-	packet_write_bytes(p, sizeof(uint64_t), &nl);
+	return packet_write_bytes(p, sizeof(uint64_t), &nl);
 }
 
-void packet_write_nbt(struct packet *p, struct nbt *n) {
+int packet_write_nbt(struct packet *p, struct nbt *n) {
 	uint8_t *ndata;
 	size_t n_len = nbt_pack(n, &ndata);
-	packet_write_bytes(p, n_len, ndata);
+	return packet_write_bytes(p, n_len, ndata);
 }

@@ -9,6 +9,7 @@
 
 #define PACKET_VARINT_TOO_LONG -2
 #define PACKET_TOO_BIG         -3
+#define PACKET_REALLOC_FAILED  -4
 
 typedef bool (*read_byte_func)(void *src, uint8_t *b);
 
@@ -51,15 +52,18 @@ void make_packet(struct packet *, int);
 struct packet *finalize_packet(struct packet *);
 ssize_t write_packet_data(int, const uint8_t data[], size_t len);
 ssize_t write_packet(int, const struct packet *);
-void packet_write_byte(struct packet *, uint8_t);
-void packet_write_bytes(struct packet *, size_t len, void *);
-void packet_write_short(struct packet *, int16_t);
+/* packet_write_byte() and the other packet_write_*() functions return how many
+ * bytes were written (which probably isn't very useful), or a negative number
+ * on error (see PACKET_*) */
+int packet_write_byte(struct packet *, uint8_t);
+int packet_write_bytes(struct packet *, size_t len, void *);
+int packet_write_short(struct packet *, int16_t);
 int packet_write_varint(struct packet *, int);
-void packet_write_string(struct packet *, int, const char[]);
-void packet_write_int(struct packet *, int32_t);
-void packet_write_float(struct packet *, float);
-void packet_write_double(struct packet *, double);
-void packet_write_long(struct packet *, uint64_t);
-void packet_write_nbt(struct packet *, struct nbt *);
+int packet_write_string(struct packet *, int, const char[]);
+int packet_write_int(struct packet *, int32_t);
+int packet_write_float(struct packet *, float);
+int packet_write_double(struct packet *, double);
+int packet_write_long(struct packet *, uint64_t);
+int packet_write_nbt(struct packet *, struct nbt *);
 
 #endif
