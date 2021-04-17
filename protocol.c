@@ -45,15 +45,18 @@ int server_list_ping(struct conn *c) {
 	const int json_len = 1000;
 	char *json = malloc(sizeof(char) * json_len);
 	/* TODO: don't hardcode, insert state instead (once state exists */
-	int n = snprintf(json, json_len-1, "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
+	int real_json_len = snprintf(json, json_len-1, "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
 		"\"players\": { \"max\": 4, \"online\": 0, \"sample\": [] },"
 		"\"description\": { \"text\": \"description\" } }");
-	if (n >= json_len - 1) {
-		fprintf(stderr, "attempted to write %d bytes to JSON buffer, consider increasing length\n", n);
+	if (real_json_len >= json_len - 1) {
+		fprintf(stderr, "attempted to write %d bytes to JSON buffer, consider increasing length\n", real_json_len);
 		return -1;
 	}
-	packet_write_string(c->packet, n, json);
+	int n = packet_write_string(c->packet, json_len - 1, json);
 	free(json);
+	if (n < 0) {
+		return n;
+	}
 
 	return conn_write_packet(c);
 }
@@ -76,16 +79,31 @@ int encryption_request(struct conn *c, size_t der_len, const unsigned char *der,
 
 	char server_id[20];
 	memset(server_id, ' ', 20);
-	packet_write_string(c->packet, 20, server_id);
+	int n = packet_write_string(c->packet, 20, server_id);
+	if (n < 0) {
+		return n;
+	}
 
-	packet_write_varint(c->packet, der_len);
-	for (size_t i = 0; i < der_len; ++i)
-		packet_write_byte(c->packet, der[i]);
+	n = packet_write_varint(c->packet, der_len);
+	if (n < 0) {
+		return n;
+	}
+	n = packet_write_bytes(c->packet, der_len, der);
+	if (n < 0) {
+		return n;
+	}
 
 	/* verify token */
-	packet_write_varint(c->packet, 4);
-	for (int i = 0; i < 4; ++i) {
-		packet_write_byte(c->packet, (verify[i] = (rand() % 255)));
+	n = packet_write_varint(c->packet, 4);
+	if (n < 0) {
+		return n;
+	}
+	int i = 0;
+	while (i < 4 && n > 0) {
+		packet_write_byte(c->packet, (verify[i++] = (rand() % 255)));
+	}
+	if (n < 0) {
+		return n;
 	}
 
 	/* TODO: maybe make the caller call conn_write_packet() and handle the
@@ -147,8 +165,14 @@ int encryption_response(struct conn *c, EVP_PKEY_CTX *ctx, const uint8_t verify[
 
 int login_success(struct conn *c, const char uuid[36], const char username[16]) {
 	make_packet(c->packet, 0x02);
-	packet_write_string(c->packet, 36, uuid);
-	packet_write_string(c->packet, 16, username);
+	int n = packet_write_string(c->packet, 36, uuid);
+	if (n < 0) {
+		return n;
+	}
+	n = packet_write_string(c->packet, 16, username);
+	if (n < 0) {
+		return n;
+	}
 	return conn_write_packet(c);
 }
 
@@ -168,8 +192,10 @@ int ping(struct conn *c, uint8_t l[8]) {
 int pong(struct conn *c, uint8_t l[8]) {
 	make_packet(c->packet, 0x01);
 
-	for (int i = 0; i < 8; ++i)
-		packet_write_byte(c->packet, l[i]);
+	int n = packet_write_bytes(c->packet, 8, l);
+	if (n < 0) {
+		return n;
+	}
 	return conn_write_packet(c);
 }
 
@@ -178,29 +204,56 @@ int join_game(struct conn *c) {
 	make_packet(p, 0x26);
 
 	/* TODO: keep track of EID for each player */
-	packet_write_int(p, 123);
+	int n = packet_write_int(p, 123);
+	if (n < 0) {
+		return n;
+	}
 	/* gamemode */
-	packet_write_byte(p, 1);
+	n = packet_write_byte(p, 1);
+	if (n < 0) {
+		return n;
+	}
 	/* dimension */
-	packet_write_int(p, 0);
+	n = packet_write_int(p, 0);
+	if (n < 0) {
+		return n;
+	}
 
 	/* TODO: pass a valid SHA-256 hash */
-	packet_write_long(p, 0);
+	n = packet_write_long(p, 0);
+	if (n < 0) {
+		return n;
+	}
 
 	/* max players, ignored */
-	packet_write_byte(p, 0);
+	n = packet_write_byte(p, 0);
+	if (n < 0) {
+		return n;
+	}
 
 	char level_type[16] = "default";
-	packet_write_string(p, 16, level_type);
+	n = packet_write_string(p, 16, level_type);
+	if (n < 0) {
+		return n;
+	}
 
 	/* view distance */
-	packet_write_varint(p, 10);
+	n = packet_write_varint(p, 10);
+	if (n < 0) {
+		return n;
+	}
 
 	/* reduced debug info */
-	packet_write_byte(p, false);
+	n = packet_write_byte(p, false);
+	if (n < 0) {
+		return n;
+	}
 
 	/* enable respawn screen */
-	packet_write_byte(p, true);
+	n = packet_write_byte(p, true);
+	if (n < 0) {
+		return n;
+	}
 
 	return conn_write_packet(c);
 }
@@ -248,9 +301,16 @@ int window_items(struct conn *c) {
 	make_packet(c->packet, 0x15);
 
 	/* window ID */
-	packet_write_byte(c->packet, 0);
+	int n = packet_write_byte(c->packet, 0);
+	if (n < 0) {
+		return n;
+	}
 	/* slot count */
-	packet_write_short(c->packet, 0);
+	n = packet_write_short(c->packet, 0);
+	if (n < 0) {
+		return n;
+	}
+
 	/* TODO: slot array https://wiki.vg/Slot_Data */
 
 	return conn_write_packet(c);
@@ -259,7 +319,10 @@ int window_items(struct conn *c) {
 int held_item_change_clientbound(struct conn *c, uint8_t slot) {
 	make_packet(c->packet, 0x40);
 
-	packet_write_byte(c->packet, slot);
+	int n = packet_write_byte(c->packet, slot);
+	if (n < 0) {
+		return n;
+	}
 	return conn_write_packet(c);
 }
 
@@ -268,7 +331,10 @@ int spawn_position(struct conn *c, uint16_t x, uint16_t y, uint16_t z) {
 
 	/* https://wiki.vg/Protocol#Position */
 	uint64_t pos = (((uint64_t)x & 0x3FFFFFF) << 38) | ((z & 0x3FFFFFF) << 12) | (y & 0xFFF);
-	packet_write_long(c->packet, pos);
+	int n = packet_write_long(c->packet, pos);
+	if (n < 0) {
+		return n;
+	}
 	return conn_write_packet(c);
 }
 
@@ -277,9 +343,11 @@ bool is_air(int blockstate) {
 	return blockstate == 0 || blockstate == 9129 || blockstate == 9130;
 }
 
-size_t write_section_to_packet(const struct section *s, struct packet *p) {
-	if (s->bits_per_block == -1)
+int write_section_to_packet(const struct section *s, struct packet *p, size_t *data_len) {
+	if (s->bits_per_block == -1) {
+		*data_len = 0;
 		return 0;
+	}
 
 	/* count non-air blocks */
 	uint16_t block_count = 0;
@@ -289,32 +357,62 @@ size_t write_section_to_packet(const struct section *s, struct packet *p) {
 			++block_count;
 		}
 	}
-	packet_write_short(p, block_count);
+	int n = packet_write_short(p, block_count);
+	if (n < 0) {
+		return n;
+	}
 
 	/* palette */
 	const uint8_t bits_per_block = s->bits_per_block;
-	packet_write_byte(p, bits_per_block);
+	n = packet_write_byte(p, bits_per_block);
+	if (n < 0) {
+		return n;
+	}
 	uint8_t palette_len = s->palette_len;
-	packet_write_varint(p, palette_len);
-	for (int i = 0; i < palette_len; ++i)
-		packet_write_varint(p, s->palette[i]);
+	n = packet_write_varint(p, palette_len);
+	if (n < 0) {
+		return n;
+	}
+	for (int i = 0; i < palette_len; ++i) {
+		n = packet_write_varint(p, s->palette[i]);
+		if (n < 0) {
+			return n;
+		}
+	}
 
 	/* write the blocks */
 	size_t blockstates_len = BLOCKSTATES_LEN(s->bits_per_block);
-	packet_write_varint(p, blockstates_len);
-	for (size_t b = 0; b < blockstates_len; ++b)
-		packet_write_long(p, s->blockstates[b]);
+	n = packet_write_varint(p, blockstates_len);
+	if (n < 0) {
+		return n;
+	}
+	for (size_t i = 0; i < blockstates_len; ++i) {
+		n = packet_write_long(p, s->blockstates[i]);
+		if (n < 0) {
+			return n;
+		}
+	}
 
-	return p->packet_len;
+	*data_len = p->packet_len;
+	return 0;
 }
 
 int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool full) {
 	struct packet *p = c->packet;
 	make_packet(p, 0x22);
 
-	packet_write_int(p, x);
-	packet_write_int(p, y);
-	packet_write_byte(p, full);
+	int n = packet_write_int(p, x);
+	if (n < 0) {
+		return n;
+	}
+	n = packet_write_int(p, y);
+	if (n < 0) {
+		return n;
+	}
+	n = packet_write_byte(p, full);
+	if (n < 0) {
+		return n;
+	}
 
 	/* primary bit mask */
 	int section_bit_mask = 0;
@@ -322,27 +420,39 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 		int has_blocks = chunk->sections[i]->bits_per_block > 0;
 		section_bit_mask |= (has_blocks << (i - 1));
 	}
-	packet_write_varint(p, section_bit_mask);
+	n = packet_write_varint(p, section_bit_mask);
+	if (n < 0) {
+		return n;
+	}
 
 	/* TODO: actually calculate heightmaps */
-	struct nbt *n = nbt_new(TAG_Long_Array, "MOTION_BLOCKING");
+	struct nbt *nbt = nbt_new(TAG_Long_Array, "MOTION_BLOCKING");
 	struct nbt_array *arr = malloc(sizeof(struct nbt_array));
 	int64_t heightmaps[36] = {0};
 	arr->len = 36;
 	arr->data.longs = heightmaps;
-	n->data.array = arr;
-	packet_write_nbt(p, n);
+	nbt->data.array = arr;
+	n = packet_write_nbt(p, nbt);
 	arr->data.longs = NULL;
-	nbt_free(n);
+	nbt_free(nbt);
+	if (n < 0) {
+		return n;
+	}
 
 	if (full && chunk->biomes != NULL) {
 		for (int i = 0; i < BIOMES_LEN; ++i) {
-			packet_write_int(p, chunk->biomes[i]);
+			n = packet_write_int(p, chunk->biomes[i]);
+			if (n < 0) {
+				return n;
+			}
 		}
 	} else if (full) {
 		for (int i = 0; i < BIOMES_LEN; ++i) {
 			/* void biome */
-			packet_write_int(p, 127);
+			n = packet_write_int(p, 127);
+			if (n < 0) {
+				return n;
+			}
 		}
 	}
 
@@ -352,17 +462,29 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	 *    [0]: https://wiki.vg/Chunk_Format#Chunk_Section_structure
 	 */
 	size_t data_len = 0;
+	/* TODO: just use one packet here instead of an array of them */
 	struct packet *block_data = calloc(chunk->sections_len, sizeof(struct packet));
 	for (int i = 1; i < chunk->sections_len; ++i) {
 		packet_init(&(block_data[i]));
-		data_len += write_section_to_packet(chunk->sections[i], &(block_data[i]));
+		size_t section_len;
+		n = write_section_to_packet(chunk->sections[i], &(block_data[i]), &section_len);
+		if (n < 0) {
+			return n;
+		}
+		data_len += section_len;
 	}
 
 	/* write sections from before */
-	packet_write_varint(p, data_len);
+	n = packet_write_varint(p, data_len);
+	if (n < 0) {
+		return n;
+	}
 	for (int s = 0; s < chunk->sections_len; ++s) {
 		for (int i = 0; i < block_data[s].packet_len; ++i) {
-			packet_write_byte(p, block_data[s].data[i]);
+			n = packet_write_byte(p, block_data[s].data[i]);
+			if (n < 0) {
+				return n;
+			}
 		}
 		free(block_data[s].data);
 	}
@@ -370,7 +492,10 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 
 	/* # of block entities */
 	/* TODO: implement block entities */
-	packet_write_varint(p, 0);
+	n = packet_write_varint(p, 0);
+	if (n < 0) {
+		return n;
+	}
 
 	return conn_write_packet(c);
 }
@@ -382,21 +507,42 @@ int player_position_look(struct conn *c, int *server_teleport_id) {
 	double x = 0;
 	double y = 0;
 	double z = 0;
-	packet_write_double(p, x);
-	packet_write_double(p, y);
-	packet_write_double(p, z);
+	int n = packet_write_double(p, x);
+	if (n < 0) {
+		return n;
+	}
+	n = packet_write_double(p, y);
+	if (n < 0) {
+		return n;
+	}
+	n = packet_write_double(p, z);
+	if (n < 0) {
+		return n;
+	}
 
 	float yaw = 0;
 	float pitch = 0;
-	packet_write_float(p, yaw);
-	packet_write_float(p, pitch);
+	n = packet_write_float(p, yaw);
+	if (n < 0) {
+		return n;
+	}
+	n = packet_write_float(p, pitch);
+	if (n < 0) {
+		return n;
+	}
 
 	uint8_t flags = 0;
-	packet_write_byte(p, flags);
+	n = packet_write_byte(p, flags);
+	if (n < 0) {
+		return n;
+	}
 
 	/* TODO: randomize it, probably */
 	*server_teleport_id = 123;
-	packet_write_varint(p, *server_teleport_id);
+	n = packet_write_varint(p, *server_teleport_id);
+	if (n < 0) {
+		return n;
+	}
 
 	return conn_write_packet(c);
 }
@@ -418,7 +564,10 @@ int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id) {
 	make_packet(c->packet, 0x21);
 
 	*id = rand();
-	packet_write_long(c->packet, *id);
+	int n = packet_write_long(c->packet, *id);
+	if (n < 0) {
+		return n;
+	}
 	*t = time(NULL);
 
 	return conn_write_packet(c);
