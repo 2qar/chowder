@@ -56,7 +56,7 @@ ssize_t write_packet(int, const struct packet *);
  * bytes were written (which probably isn't very useful), or a negative number
  * on error (see PACKET_*) */
 int packet_write_byte(struct packet *, uint8_t);
-int packet_write_bytes(struct packet *, size_t len, void *);
+int packet_write_bytes(struct packet *, size_t len, const void *);
 int packet_write_short(struct packet *, int16_t);
 int packet_write_varint(struct packet *, int);
 int packet_write_string(struct packet *, int, const char[]);

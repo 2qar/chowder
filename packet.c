@@ -232,7 +232,7 @@ int packet_write_byte(struct packet *p, uint8_t b) {
 }
 
 /* writes bytes without changing the byte order of the data */
-int packet_write_bytes(struct packet *p, size_t len, void *data) {
+int packet_write_bytes(struct packet *p, size_t len, const void *data) {
 	int err = packet_try_resize(p, p->packet_len + len);
 	if (err)
 		return err;
