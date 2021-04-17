@@ -348,6 +348,7 @@ int write_section_to_packet(const struct section *s, struct packet *p, size_t *d
 		*data_len = 0;
 		return 0;
 	}
+	p->packet_mode = PACKET_MODE_WRITE;
 
 	/* count non-air blocks */
 	uint16_t block_count = 0;

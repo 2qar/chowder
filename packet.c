@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,6 +56,8 @@ int read_varint_sfd(int sfd, int *v) {
 }
 
 int packet_read_header(struct packet *p, int sfd) {
+	p->packet_mode = PACKET_MODE_READ;
+
 	int n = read_varint_sfd(sfd, &(p->packet_len));
 	if (n <= 0) {
 		return n;
@@ -89,6 +92,8 @@ int packet_read_header(struct packet *p, int sfd) {
 }
 
 bool packet_read_byte(struct packet *p, uint8_t *b) {
+	assert(p->packet_mode == PACKET_MODE_READ);
+
 	if (p->index + 1 == MAX_PACKET_LEN) {
 		*b = 0;
 		return false;
@@ -158,6 +163,7 @@ bool packet_read_position(struct packet *p, int32_t *x, int16_t *y, int32_t *z) 
 }
 
 void make_packet(struct packet *p, int id) {
+	p->packet_mode = PACKET_MODE_WRITE;
 	p->packet_len = 0;
 	p->index = 0;
 	p->packet_id = id;
@@ -222,6 +228,8 @@ static int packet_try_resize(struct packet *p, size_t new_size) {
 }
 
 int packet_write_byte(struct packet *p, uint8_t b) {
+	assert(p->packet_mode == PACKET_MODE_WRITE);
+
 	int err = packet_try_resize(p, p->packet_len + 1);
 	if (err)
 		return err;
@@ -233,6 +241,8 @@ int packet_write_byte(struct packet *p, uint8_t b) {
 
 /* writes bytes without changing the byte order of the data */
 int packet_write_bytes(struct packet *p, size_t len, const void *data) {
+	assert(p->packet_mode == PACKET_MODE_WRITE);
+
 	int err = packet_try_resize(p, p->packet_len + len);
 	if (err)
 		return err;

@@ -23,7 +23,12 @@ int read_varint_gen(read_byte_func, void *src, int *v);
 /* default packet buf len + size added each time the buffer fills up */
 #define PACKET_BLOCK_SIZE 4096
 
-/* TODO: maybe enforce read / write states to avoid funky business */
+/* used to preserve my sanity */
+enum packet_mode {
+	PACKET_MODE_READ,
+	PACKET_MODE_WRITE,
+};
+
 /* packets are pretty much a read/write buffer for network data.
  * "packet" might not be the best name for them but it works */
 struct packet {
@@ -32,6 +37,8 @@ struct packet {
 	size_t data_len;
 	uint8_t *data;
 	int index;
+	/* don't touch this or you will suffer */
+	enum packet_mode packet_mode;
 };
 
 /* allocates the packet's data buffer + zeroes the fields just in case */

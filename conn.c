@@ -44,6 +44,8 @@ int parse_encrypted_packet(struct conn *c) {
 	 *       instead of calling read()'ing individual bytes like
 	 *       read_encrypted_byte() does */
 	struct packet *p = c->packet;
+	p->packet_mode = PACKET_MODE_READ;
+
 	int packet_len_bytes = read_varint_gen(read_encrypted_byte, (void *) c, &(p->packet_len));
 	if (packet_len_bytes < 0) {
 		fprintf(stderr, "error reading packet length\n");
