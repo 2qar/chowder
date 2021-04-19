@@ -317,8 +317,10 @@ int packet_write_long(struct packet *p, uint64_t l) {
 	return packet_write_bytes(p, sizeof(uint64_t), &nl);
 }
 
-int packet_write_nbt(struct packet *p, struct nbt *n) {
-	uint8_t *ndata;
-	size_t n_len = nbt_pack(n, &ndata);
-	return packet_write_bytes(p, n_len, ndata);
+int packet_write_nbt(struct packet *p, struct nbt *nbt) {
+	uint8_t *nbt_data;
+	size_t nbt_len = nbt_pack(nbt, &nbt_data);
+	int n = packet_write_bytes(p, nbt_len, nbt_data);
+	free(nbt_data);
+	return n;
 }
