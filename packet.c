@@ -216,13 +216,16 @@ static int packet_try_resize(struct packet *p, size_t new_size) {
 	if (new_size > MAX_PACKET_LEN) {
 		return PACKET_TOO_BIG;
 	} else if (new_size > p->data_len) {
-		p->data_len += PACKET_BLOCK_SIZE;
-		void *buf = realloc(p->data, p->data_len);
+		size_t new_data_len = p->data_len;
+		while (new_data_len < new_size) {
+			new_data_len += PACKET_BLOCK_SIZE;
+		}
+		void *buf = realloc(p->data, new_data_len);
 		if (buf == NULL) {
 			return PACKET_REALLOC_FAILED;
-		} else {
-			p->data = buf;
 		}
+		p->data_len = new_data_len;
+		p->data = buf;
 	}
 	return 0;
 }
