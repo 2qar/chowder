@@ -343,12 +343,10 @@ bool is_air(int blockstate) {
 	return blockstate == 0 || blockstate == 9129 || blockstate == 9130;
 }
 
-int write_section_to_packet(const struct section *s, struct packet *p, size_t *data_len) {
+int write_section_to_packet(const struct section *s, struct packet *p) {
 	if (s->bits_per_block == -1) {
-		*data_len = 0;
 		return 0;
 	}
-	p->packet_mode = PACKET_MODE_WRITE;
 
 	/* count non-air blocks */
 	uint16_t block_count = 0;
@@ -394,7 +392,6 @@ int write_section_to_packet(const struct section *s, struct packet *p, size_t *d
 		}
 	}
 
-	*data_len = p->packet_len;
 	return 0;
 }
 
@@ -457,39 +454,27 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 		}
 	}
 
-	/* Write each chunk in this[0] format to temporary buffers
-	 * and record the total length of each buffer for writing
-	 * to the main packet.
-	 *    [0]: https://wiki.vg/Chunk_Format#Chunk_Section_structure
-	 */
-	size_t data_len = 0;
-	/* TODO: just use one packet here instead of an array of them */
-	struct packet *block_data = calloc(chunk->sections_len, sizeof(struct packet));
+	struct packet sections = {0};
+	packet_init(&sections);
+	sections.packet_mode = PACKET_MODE_WRITE;
 	for (int i = 1; i < chunk->sections_len; ++i) {
-		packet_init(&(block_data[i]));
-		size_t section_len;
-		n = write_section_to_packet(chunk->sections[i], &(block_data[i]), &section_len);
+		n = write_section_to_packet(chunk->sections[i], &sections);
 		if (n < 0) {
+			free(sections.data);
 			return n;
 		}
-		data_len += section_len;
 	}
 
-	/* write sections from before */
-	n = packet_write_varint(p, data_len);
+	n = packet_write_varint(p, sections.packet_len);
+	if (n < 0) {
+		free(sections.data);
+		return n;
+	}
+	n = packet_write_bytes(p, sections.packet_len, sections.data);
+	free(sections.data);
 	if (n < 0) {
 		return n;
 	}
-	for (int s = 0; s < chunk->sections_len; ++s) {
-		for (int i = 0; i < block_data[s].packet_len; ++i) {
-			n = packet_write_byte(p, block_data[s].data[i]);
-			if (n < 0) {
-				return n;
-			}
-		}
-		free(block_data[s].data);
-	}
-	free(block_data);
 
 	/* # of block entities */
 	/* TODO: implement block entities */
