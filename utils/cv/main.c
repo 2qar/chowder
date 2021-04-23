@@ -99,6 +99,8 @@ int main(int argc, char **argv) {
 
 	hashmap_free(block_table, free);
 	free(p);
+	free_chunk(c);
+	free_block_names();
 	exit(EXIT_SUCCESS);
 }
 
@@ -144,6 +146,7 @@ struct chunk *chunk_at(const char *filename, struct hashmap *block_table, int x,
 		exit(EXIT_FAILURE);
 	}
 	struct chunk *c = parse_chunk(block_table, len, chunk_buf);
+	free(chunk_buf);
 	if (c == NULL) {
 		fprintf(stderr, "cv: error parsing chunk\n");
 		exit(EXIT_FAILURE);

@@ -14,7 +14,14 @@
 #define TOKENS 800000
 
 #ifdef BLOCK_NAMES
+size_t block_names_len;
 char **block_names;
+
+void free_block_names() {
+	for (size_t i = 0; i < block_names_len; ++i)
+		free(block_names[i]);
+	free(block_names);
+}
 #endif
 
 char *read_blocks_json(char *blocks_json_path) {
@@ -96,7 +103,8 @@ int add_block_id(struct hashmap *hm, char *name, int id) {
 	memcpy(data, (void *) &id, sizeof(int));
 
 	#ifdef BLOCK_NAMES
-	block_names[id] = strdup(name);
+	if (block_names[id] == NULL)
+		block_names[id] = strdup(name);
 	#endif
 
 	hashmap_add(hm, name, data);
@@ -206,7 +214,8 @@ struct hashmap *create_block_table_from_json(char *blocks_json) {
 	j.tokens = t;
 	int block_ids = max_block_id(&j) + 1;
 	#ifdef BLOCK_NAMES
-	block_names = malloc(sizeof(char *) * block_ids);
+	block_names_len = block_ids;
+	block_names = calloc(block_ids, sizeof(char *));
 	#endif
 	struct hashmap *hm = hashmap_new(block_ids);
 	int parsed = parse_blocks_json(hm, &j);
