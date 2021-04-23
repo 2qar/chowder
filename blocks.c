@@ -2,12 +2,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
-#include <search.h>
 
 #include "blocks.h"
 
 #include "include/jsmn/jsmn.h"
+#include "include/hashmap.h"
 
 /* FIXME: this just happens to work and is also a little too many */
 #define TOKENS 800000
@@ -88,25 +89,21 @@ int jseek(struct json *j, char *s, int from) {
 	return index;
 }
 
-int add_block_id(char *name, int id) {
-	ENTRY e;
-	e.key = malloc(sizeof(char) * strlen(name) + 1);
-	snprintf(e.key, strlen(name)+1, "%s", name);
-	e.data = malloc(sizeof(int));
-	memcpy(e.data, (void *) &id, sizeof(int));
+int add_block_id(struct hashmap *hm, char *name, int id) {
+	/* TODO: malloc() a bunch of u16's instead of i32's
+	 *       to save memory XD */
+	void *data = malloc(sizeof(int));
+	memcpy(data, (void *) &id, sizeof(int));
 
 	#ifdef BLOCK_NAMES
-	block_names[id] = e.key;
+	block_names[id] = strdup(name);
 	#endif
 
-	ENTRY *result = hsearch(e, ENTER);
-	if (result == NULL) {
-		fprintf(stderr, "error adding '%s' to table\n", name);
-	}
-	return result != NULL;
+	hashmap_add(hm, name, data);
+	return 1;
 }
 
-int parse_block_states(struct json *j, char *block_name, int state_index, int *count) {
+int parse_block_states(struct hashmap *hm, struct json *j, char *block_name, int state_index, int *count) {
 	char prop_name[256] = {0};
 	snprintf(prop_name, 256, "%s", block_name);
 	int state_end = j->tokens[state_index].end;
@@ -148,9 +145,9 @@ int parse_block_states(struct json *j, char *block_name, int state_index, int *c
 		snprintf(id_str, 16, "%.*s", toklen(&(j->tokens[i])), j->src + j->tokens[i].start);
 		int id = atoi(id_str);
 
-		*count += add_block_id(prop_name, id);
+		*count += add_block_id(hm, prop_name, id);
 		if (is_default && strncmp(block_name, prop_name, strlen(block_name)) == 0)
-			add_block_id(block_name, id);
+			add_block_id(hm, block_name, id);
 	}
 
 	i = state_index;
@@ -161,7 +158,7 @@ int parse_block_states(struct json *j, char *block_name, int state_index, int *c
 }
 
 /* parse each of the block IDs into a hashtable */
-int parse_blocks_json(struct json *j) {
+int parse_blocks_json(struct hashmap *hm, struct json *j) {
 	int count = 0;
 	int i = 1;
 	int name_len = 128;
@@ -182,7 +179,7 @@ int parse_blocks_json(struct json *j) {
 			++i;
 			assert(j->tokens[i].type == JSMN_OBJECT);
 			while (i < j->tokens_len && j->tokens[i].start < states_end)
-				i = parse_block_states(j, name, i, &count);
+				i = parse_block_states(hm, j, name, i, &count);
 		}
 
 		while (i < j->tokens_len && j->tokens[i].start < block_token_end)
@@ -191,14 +188,15 @@ int parse_blocks_json(struct json *j) {
 	return count;
 }
 
-int create_block_table_from_json(char *blocks_json) {
+struct hashmap *create_block_table_from_json(char *blocks_json) {
 	jsmn_parser p;
 	jsmn_init(&p);
 	jsmntok_t *t = malloc(sizeof(jsmntok_t) * TOKENS);
 	int tokens = jsmn_parse(&p, blocks_json, strlen(blocks_json), t, TOKENS);
 	if (tokens < 0) {
 		fprintf(stderr, "error parsing blocks.json: %d\n", tokens);
-		return 1;
+		free(t);
+		return NULL;
 	}
 	t = realloc(t, sizeof(jsmntok_t) * tokens);
 
@@ -210,41 +208,26 @@ int create_block_table_from_json(char *blocks_json) {
 	#ifdef BLOCK_NAMES
 	block_names = malloc(sizeof(char *) * block_ids);
 	#endif
-	/* hcreate(3) said 25% extra space helps w/ performance sooo */
-	hcreate(block_ids * (block_ids / 4));
-	int parsed = parse_blocks_json(&j);
+	struct hashmap *hm = hashmap_new(block_ids);
+	int parsed = parse_blocks_json(hm, &j);
 	if (parsed != block_ids) {
 		fprintf(stderr, "too few blocks parsed; parsed (%d) != block_ids (%d)\n", parsed, block_ids);
-		return 1;
+		return NULL;
 	}
 
 	free(t);
-	return 0;
+	return hm;
 }
 
-int create_block_table(char *block_json_path) {
+struct hashmap *create_block_table(char *block_json_path) {
 	char *blocks_json = read_blocks_json(block_json_path);
 	if (blocks_json == NULL)
-		return 1;
+		return NULL;
 
-	int failed = create_block_table_from_json(blocks_json);
-	if (failed)
-		return 1;
-
+	struct hashmap *hm = create_block_table_from_json(blocks_json);
 	free(blocks_json);
-	return 0;
-}
+	if (hm == NULL)
+		return NULL;
 
-int block_id(char *name) {
-	int id = 0;
-
-	ENTRY e;
-	e.key = name;
-	ENTRY *found = hsearch(e, FIND);
-	if (found != NULL)
-		id = *((int *) found->data);
-	else
-		fprintf(stderr, "error finding a block ID for \"%s\"\n", name);
-
-	return id;
+	return hm;
 }

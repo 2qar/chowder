@@ -32,7 +32,7 @@ static bool running = true;
 void sigint_handler(int);
 int check_level_path(char *);
 int bind_socket();
-int handle_connection(struct world *, int conn_fd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der);
+int handle_connection(struct world *, struct hashmap *, int conn_fd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der);
 
 int main() {
 	struct sigaction act = {0};
@@ -49,8 +49,8 @@ int main() {
 	int failed = check_level_path(LEVEL_PATH);
 	if (failed)
 		exit(EXIT_FAILURE);
-	failed = create_block_table(BLOCKS_PATH);
-	if (failed)
+	struct hashmap *block_table = create_block_table(BLOCKS_PATH);
+	if (block_table == NULL)
 		exit(EXIT_FAILURE);
 
 	/* RSA keygen */
@@ -73,7 +73,7 @@ int main() {
 	while (running) {
 		int conn = accept(sfd, NULL, NULL);
 		if (conn != -1) {
-			handle_connection(w, conn, ctx, der_len, der);
+			handle_connection(w, block_table, conn, ctx, der_len, der);
 		} else if (errno != EINTR) {
 			perror("accept");
 		}
@@ -85,6 +85,7 @@ int main() {
 	EVP_PKEY_CTX_free(ctx);
 	EVP_PKEY_free(pkey);
 	close(sfd);
+	hashmap_free(block_table, free);
 
 	exit(EXIT_SUCCESS);
 }
@@ -129,7 +130,7 @@ int bind_socket() {
 }
 
 
-int handle_connection(struct world *w, int sfd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der) {
+int handle_connection(struct world *w, struct hashmap *block_table, int sfd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der) {
 	struct conn conn = {0};
 	conn.sfd = sfd;
 	conn.packet = malloc(sizeof(struct packet));
@@ -188,7 +189,7 @@ int handle_connection(struct world *w, int sfd, EVP_PKEY_CTX *ctx, size_t der_le
 			if (chunk == NULL) {
 				int uncompressed_len = read_chunk(f, x, z, &chunk_buf_len, &chunk_buf);
 				if (uncompressed_len > 0) {
-					chunk = parse_chunk(uncompressed_len, chunk_buf);
+					chunk = parse_chunk(block_table, uncompressed_len, chunk_buf);
 					if (chunk == NULL) {
 						fprintf(stderr, "also panic\n");
 						return -1;

@@ -110,7 +110,7 @@ size_t sorted_properties(struct nbt *properties_nbt, struct nbt ***properties) {
 	return properties_len;
 }
 
-int palette_entry_to_block_id(struct nbt *block) {
+int palette_entry_to_block_id(struct hashmap *block_table, struct nbt *block) {
 	size_t name_len = block_name_and_properties_length(block);
 	char *name = malloc(sizeof(char) * (name_len + 1));
 
@@ -135,13 +135,18 @@ int palette_entry_to_block_id(struct nbt *block) {
 		strcat(name, properties[i]->data.string);
 	}
 
-	int id = block_id(name);
+	int *id = hashmap_get(block_table, name);
 	free(name);
 	free(properties);
-	return id;
+	if (id == NULL) {
+		fprintf(stderr, "no block id for block '%s'\n", name);
+		return 0;
+	} else {
+		return *id;
+	}
 }
 
-void build_palette(struct section *s, struct nbt_list *palette) {
+void build_palette(struct hashmap *block_table, struct section *s, struct nbt_list *palette) {
 	s->palette_len = list_len(palette->head);
 	s->bits_per_block = (int) ceil(log2(s->palette_len));
 	if (s->bits_per_block < 4)
@@ -153,13 +158,13 @@ void build_palette(struct section *s, struct nbt_list *palette) {
 	struct node *l = palette->head;
 	int i = 0;
 	while (!list_empty(l)) {
-		s->palette[i] = palette_entry_to_block_id(list_item(l));
+		s->palette[i] = palette_entry_to_block_id(block_table, list_item(l));
 		++i;
 		l = list_next(l);
 	}
 }
 
-struct chunk *parse_chunk(size_t chunk_data_len, uint8_t *chunk_data) {
+struct chunk *parse_chunk(struct hashmap *block_table, size_t chunk_data_len, uint8_t *chunk_data) {
 	struct chunk *c = malloc(sizeof(struct chunk));
 
 	struct nbt *n = nbt_unpack(chunk_data_len, chunk_data);
@@ -190,7 +195,7 @@ struct chunk *parse_chunk(size_t chunk_data_len, uint8_t *chunk_data) {
 		s->bits_per_block = -1;
 		s->palette_len = -1;
 		if (palette != NULL) {
-			build_palette(s, palette->data.list);
+			build_palette(block_table, s, palette->data.list);
 		}
 
 		struct nbt *blockstates = nbt_get(s_nbt, TAG_Long_Array, "BlockStates");

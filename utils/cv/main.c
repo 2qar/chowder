@@ -12,10 +12,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <search.h>
 
 #include "../../blocks.h"
 #include "../../region.h"
+#include "../../include/hashmap.h"
 
 #define BLOCKS_JSON_PATH "../../gamedata/blocks.json"
 
@@ -33,7 +33,7 @@ struct world_pos {
 int is_region_file(const char *filename);
 struct pos *parse_chunk_pos(const char *in);
 struct world_pos *parse_world_pos(const char *in);
-struct chunk *chunk_at(const char *filename, int x, int z);
+struct chunk *chunk_at(const char *filename, struct hashmap *block_table, int x, int z);
 void print_section(struct section *, const struct pos *);
 void print_sections(struct chunk *, struct pos *);
 void print_block_at(struct chunk *, struct world_pos *);
@@ -65,8 +65,8 @@ int main(int argc, char **argv) {
 		}
 	}
 	
-	int failed = create_block_table(BLOCKS_JSON_PATH);
-	if (failed) {
+	struct hashmap *block_table = create_block_table(BLOCKS_JSON_PATH);
+	if (block_table == NULL) {
 		fprintf(stderr, "cv: error creating block table\n");
 		exit(EXIT_FAILURE);
 	}
@@ -75,10 +75,10 @@ int main(int argc, char **argv) {
 		struct world_pos *w = p;
 		int x = w->x / 16;
 		int z = w->z / 16;
-		c = chunk_at(argv[1], x, z);
+		c = chunk_at(argv[1], block_table, x, z);
 	} else {
 		struct pos *pos = p;
-		c = chunk_at(argv[1], pos->x, pos->z);
+		c = chunk_at(argv[1], block_table, pos->x, pos->z);
 	}
 
 	if (world_coords) {
@@ -97,8 +97,8 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	hashmap_free(block_table, free);
 	free(p);
-	hdestroy();
 	exit(EXIT_SUCCESS);
 }
 
@@ -129,7 +129,7 @@ struct world_pos *parse_world_pos(const char *in) {
 	return p;
 }
 
-struct chunk *chunk_at(const char *filename, int x, int z) {
+struct chunk *chunk_at(const char *filename, struct hashmap *block_table, int x, int z) {
 	FILE *f = fopen(filename, "r");
 
 	Bytef *chunk_buf = NULL;
@@ -143,7 +143,7 @@ struct chunk *chunk_at(const char *filename, int x, int z) {
 		fprintf(stderr, "cv: no chunk at \"%d,%d\"\n", x, z);
 		exit(EXIT_FAILURE);
 	}
-	struct chunk *c = parse_chunk(len, chunk_buf);
+	struct chunk *c = parse_chunk(block_table, len, chunk_buf);
 	if (c == NULL) {
 		fprintf(stderr, "cv: error parsing chunk\n");
 		exit(EXIT_FAILURE);
