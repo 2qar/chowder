@@ -14,9 +14,6 @@
 #include <string.h>
 #include <search.h>
 
-/* FIXME: this include here is hacky, it's only here because
- *        the include in blocks.c doesn't work */
-#include "../../include/jsmn/jsmn.h"
 #include "../../blocks.h"
 #include "../../region.h"
 

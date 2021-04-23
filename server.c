@@ -12,6 +12,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#define JSMN_HEADER
 #include "include/jsmn/jsmn.h"
 #include "server.h"
 #include "protocol.h"

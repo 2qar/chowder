@@ -7,7 +7,6 @@
 
 #include "blocks.h"
 
-#define JSMN_HEADER
 #include "include/jsmn/jsmn.h"
 
 /* FIXME: this just happens to work and is also a little too many */

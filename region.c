@@ -10,11 +10,7 @@
 #include "blocks.h"
 #include "nbt.h"
 
-#define JSMN_HEADER
-#include "include/jsmn/jsmn.h"
-
 #define COMPRESSION_TYPE_ZLIB 2
-
 #define GLOBAL_BITS_PER_BLOCK 14
 
 ssize_t read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, Bytef **chunk) {
