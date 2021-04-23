@@ -30,6 +30,7 @@ char *read_blocks_json(char *blocks_json_path) {
 	rewind(f);
 	char *blocks_json = malloc(sizeof(char) * (blocks_json_len + 1));
 	size_t n = fread(blocks_json, sizeof(char), blocks_json_len, f);
+	fclose(f);
 	if (n < blocks_json_len) {
 		perror("error reading blocks file");
 		fprintf(stderr, "read %ld, expected %ld\n", n, blocks_json_len);

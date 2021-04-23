@@ -229,6 +229,7 @@ void free_section(struct section *s) {
 void free_chunk(struct chunk *c) {
 	for (int i = 0; i < c->sections_len; ++i)
 		free_section(c->sections[i]);
+	free(c->biomes);
 	free(c);
 }
 
