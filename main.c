@@ -219,6 +219,19 @@ int handle_connection(struct world *w, struct hashmap *block_table, int sfd, EVP
 		return 1;
 	}
 
+	struct player_info info = {0};
+	memcpy(info.uuid, conn.player->uuid, 16);
+	memcpy(info.add.username, conn.player->username, sizeof(char) * 16);
+	info.add.properties_len = 1;
+	struct player_info_property prop;
+	prop.name = "textures";
+	prop.value = conn.player->textures;
+	info.add.properties = &prop;
+	if (player_info(&conn, PLAYER_INFO_ADD_PLAYER, 1, &info) < 0) {
+		fprintf(stderr, "error sending player info\n");
+		return 1;
+	}
+
 	puts("sent all of the shit, just waiting on a teleport confirm");
 
 	struct pollfd pfd = { .fd = sfd, .events = POLLIN };

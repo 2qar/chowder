@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -11,6 +12,13 @@
 #include "region.h"
 #include "world.h"
 #include "nbt.h"
+
+#define RET_ON_FAIL(packet_write_call) \
+	do { \
+	int status = packet_write_call; \
+	if (status < 0) \
+		return status; \
+	} while (0);
 
 int handshake(struct conn *c) {
 	if (conn_packet_read_header(c) < 0)
@@ -481,6 +489,57 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	n = packet_write_varint(p, 0);
 	if (n < 0) {
 		return n;
+	}
+
+	return conn_write_packet(c);
+}
+
+static int write_new_player_info(struct packet *p, struct player_info *info) {
+	RET_ON_FAIL(packet_write_string(p, strlen(info->add.username), info->add.username));
+	RET_ON_FAIL(packet_write_varint(p, info->add.properties_len));
+	struct player_info_property prop;
+	for (size_t i = 0; i < info->add.properties_len; ++i) {
+		prop = info->add.properties[i];
+		size_t name_len = strlen(prop.name);
+		RET_ON_FAIL(packet_write_string(p, name_len, prop.name));
+		size_t value_len = strlen(prop.value);
+		RET_ON_FAIL(packet_write_string(p, value_len, prop.value));
+		/* TODO: not every property is unsigned, i think */
+		RET_ON_FAIL(packet_write_byte(p, false));
+	}
+	RET_ON_FAIL(packet_write_varint(p, info->add.gamemode));
+	RET_ON_FAIL(packet_write_varint(p, info->add.ping));
+	/* TODO: handle display names */
+	assert(info->add.has_display_name == false);
+	RET_ON_FAIL(packet_write_byte(p, false));
+	return 0;
+}
+
+int player_info(struct conn *c, enum player_info_action action, size_t players, struct player_info *info) {
+	assert(action >= PLAYER_INFO_ADD_PLAYER && action <= PLAYER_INFO_REMOVE_PLAYER);
+	make_packet(c->packet, 0x34);
+
+	RET_ON_FAIL(packet_write_varint(c->packet, action));
+	RET_ON_FAIL(packet_write_varint(c->packet, players));
+	for (size_t i = 0; i < players; ++i) {
+		RET_ON_FAIL(packet_write_bytes(c->packet, 16, info[i].uuid));
+		switch (action) {
+		case PLAYER_INFO_ADD_PLAYER:
+			RET_ON_FAIL(write_new_player_info(c->packet, &info[i]));
+			break;
+		case PLAYER_INFO_UPDATE_GAMEMODE:
+			RET_ON_FAIL(packet_write_varint(c->packet, info[i].new_gamemode));
+			break;
+		case PLAYER_INFO_UPDATE_LATENCY:
+			RET_ON_FAIL(packet_write_varint(c->packet, info[i].new_ping));
+			break;
+		case PLAYER_INFO_UPDATE_DISPLAY_NAME:
+			assert(info[i].display_name.has == false);
+			RET_ON_FAIL(packet_write_byte(c->packet, false));
+			break;
+		case PLAYER_INFO_REMOVE_PLAYER:
+			break;
+		}
 	}
 
 	return conn_write_packet(c);

@@ -6,13 +6,14 @@
 #include <openssl/evp.h>
 
 #include "packet.h"
+#include "player.h"
 
 struct conn {
 	int sfd;
 	struct packet *packet;
 	EVP_CIPHER_CTX *_decrypt_ctx;
 	EVP_CIPHER_CTX *_encrypt_ctx;
-	uint8_t uuid[16];
+	struct player *player;
 };
 
 int conn_init(struct conn *, int, const uint8_t[16]);

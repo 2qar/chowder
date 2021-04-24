@@ -188,9 +188,9 @@ char *read_body(char *resp) {
 	return NULL;
 }
 
-int player_id(const char *username, const char *hash, char uuid[32]) {
+int player_id(const char *hash, char uuid[36], struct player *player) {
 	char *response = NULL;
-	int response_len = ping_sessionserver(username, hash, &response);
+	int response_len = ping_sessionserver(player->username, hash, &response);
 	if (response_len < 0) {
 		if (response != NULL)
 			free(response);
@@ -213,11 +213,16 @@ int player_id(const char *username, const char *hash, char uuid[32]) {
 		fprintf(stderr, "no JSON object\n");
 		return -1;
 	}
+
 	for (int i = 1; i < tokens; ++i) {
-		if (t[i].type == JSMN_STRING && t[i].end - t[i].start == 2 && !strncmp(body + t[i].start, "id", 2)) {
-			for (int j = 0; j < 32; ++j)
-				uuid[j] = body[j + t[i+1].start];
-			break;
+		if (t[i].type == JSMN_STRING) {
+			if (!strncmp(body + t[i].start, "id", 2)) {
+				memcpy(uuid, body + t[i+1].start, 32);
+			} else if (!strncmp(body + t[i].start, "value", 5)) {
+				size_t textures_len = t[i+1].end - t[i+1].start;
+				player->textures = calloc(textures_len + 1, sizeof(char));
+				memcpy(player->textures, body + t[i+1].start, textures_len);
+			}
 		}
 	}
 	free(response);
@@ -245,13 +250,14 @@ void format_uuid(char uuid[32], char formatted[37]) {
 void uuid_bytes(char uuid[33], uint8_t bytes[16]) {
 	BIGNUM *bn = BN_new();
 	BN_hex2bn(&bn, uuid);
+	/* FIXME: writing oob */
 	BN_bn2bin(bn, bytes);
 	BN_free(bn);
 }
 
 int login(struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len, EVP_PKEY_CTX *decrypt_ctx) {
-	char username[17];
-	if (login_start(c, username) < 0)
+	c->player = calloc(1, sizeof(struct player));
+	if (login_start(c, c->player->username) < 0)
 		return -1;
 	uint8_t verify[4];
 	if (encryption_request(c, pubkey_len, pubkey_der, verify) < 0)
@@ -264,8 +270,8 @@ int login(struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len, EVP_PKEY
 		fputs("error generating SHA1 hash", stderr);
 		return -1;
 	}
-	char uuid[33] = {0};
-	if (player_id(username, hash, uuid) < 0)
+	char uuid[32];
+	if (player_id(hash, uuid, c->player) < 0)
 		return -1;
 	free(hash);
 
@@ -278,6 +284,6 @@ int login(struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len, EVP_PKEY
 
 	char formatted_uuid[37] = {0};
 	format_uuid(uuid, formatted_uuid);
-	uuid_bytes(uuid, c->uuid);
-	return login_success(c, formatted_uuid, username);
+	uuid_bytes(uuid, c->player->uuid);
+	return login_success(c, formatted_uuid, c->player->username);
 }
