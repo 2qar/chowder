@@ -14,7 +14,7 @@
 
 #define JSMN_HEADER
 #include "include/jsmn/jsmn.h"
-#include "server.h"
+#include "login.h"
 #include "protocol.h"
 
 int handle_server_list_ping(struct conn *c) {

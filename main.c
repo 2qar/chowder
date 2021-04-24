@@ -16,7 +16,7 @@
 
 #include "blocks.h"
 #include "protocol.h"
-#include "server.h"
+#include "login.h"
 #include "conn.h"
 #include "rsa.h"
 #include "world.h"
