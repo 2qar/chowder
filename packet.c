@@ -196,6 +196,7 @@ struct packet *finalize_packet(struct packet *p) {
 
 ssize_t write_packet_data(int sfd, const uint8_t data[], size_t len) {
 	ssize_t n;
+	/* FIXME: handle closed sockets */
 	if ((n = write(sfd, data, len)) < 0) {
 		perror("write");
 		return -1;

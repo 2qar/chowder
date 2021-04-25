@@ -4,6 +4,7 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
+#include <fcntl.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -17,6 +18,7 @@
 #include "blocks.h"
 #include "protocol.h"
 #include "login.h"
+#include "server.h"
 #include "conn.h"
 #include "rsa.h"
 #include "world.h"
@@ -32,7 +34,6 @@ static bool running = true;
 void sigint_handler(int);
 int check_level_path(char *);
 int bind_socket();
-int handle_connection(struct world *, struct hashmap *, int conn_fd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der);
 
 int main() {
 	struct sigaction act = {0};
@@ -68,19 +69,52 @@ int main() {
 		exit(EXIT_FAILURE);
 
 	struct world *w = world_new();
+	struct node *connections = list_new();
+	struct packet packet;
+	packet_init(&packet);
 
 	/* connection handling */
 	while (running) {
+		/* FIXME: super high cpu usage, should probably tick */
+
 		int conn = accept(sfd, NULL, NULL);
-		if (conn != -1) {
-			handle_connection(w, block_table, conn, ctx, der_len, der);
-		} else if (errno != EINTR) {
+		if (conn == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
 			perror("accept");
+		} else if (conn != -1) {
+			struct conn *c = server_handshake(conn, &packet);
+			if (c == NULL) {
+				close(conn);
+				goto loop_conns;
+			}
+
+			int err = login(c, der, der_len, ctx);
+			if (err < 0) {
+				// TODO: return meaningful errors instead of -1 everywhere
+				fprintf(stderr, "error logging in: %d\n", err);
+				conn_finish(c);
+			} else {
+				server_initialize_play_state(c, w, block_table);
+				list_append(connections, sizeof(struct conn *), &c);
+			}
+		}
+
+loop_conns:;
+		struct node *connection = connections;
+		while (!list_empty(connection)) {
+			int status = server_play(list_item(connection), w);
+			if (status <= 0) {
+				struct conn *c = list_remove(connection);
+				conn_finish(c);
+				free(c);
+			} else {
+				connection = list_next(connection);
+			}
 		}
 	}
 
 	puts("shutdown time");
 
+	free(packet.data);
 	free(der);
 	EVP_PKEY_CTX_free(ctx);
 	EVP_PKEY_free(pkey);
@@ -110,6 +144,10 @@ int check_level_path(char *level_path) {
 
 int bind_socket() {
 	int sfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (fcntl(sfd, F_SETFL, O_NONBLOCK) < 0) {
+		perror("fcntl");
+		return -1;
+	}
 
 	struct sockaddr_in saddr = {0};
 	saddr.sin_family = AF_INET;
@@ -127,164 +165,4 @@ int bind_socket() {
 	}
 
 	return sfd;
-}
-
-
-int handle_connection(struct world *w, struct hashmap *block_table, int sfd, EVP_PKEY_CTX *ctx, size_t der_len, const uint8_t *der) {
-	struct conn conn = {0};
-	conn.sfd = sfd;
-	conn.packet = malloc(sizeof(struct packet));
-	packet_init(conn.packet);
-
-	int next_state = handshake(&conn);
-	if (next_state == 1) {
-		handle_server_list_ping(&conn);
-		conn_finish(&conn);
-		return 0;
-	}
-
-	printf("next state is %d\n", next_state);
-
-	EVP_PKEY_CTX *login_decrypt_ctx = EVP_PKEY_CTX_dup(ctx);
-	int err = login(&conn, der, der_len, login_decrypt_ctx);
-	if (err < 0) {
-		// TODO: return meaningful errors instead of -1 everywhere
-		fprintf(stderr, "error logging in: %d\n", err);
-		return 1;
-	}
-	EVP_PKEY_CTX_free(login_decrypt_ctx);
-
-	join_game(&conn);
-	puts("joined the game");
-	if (client_settings(&conn) < 0) {
-		fprintf(stderr, "error reading client settings\n");
-		return 1;
-	}
-	if (held_item_change_clientbound(&conn, 0) < 0) {
-		fprintf(stderr, "error sending held item change\n");
-		return 1;
-	}
-	if (window_items(&conn) < 0) {
-		fprintf(stderr, "error sending window items\n");
-		return 1;
-	}
-
-	struct region *r = world_region_at(w, 0, 0);
-	if (r == NULL) {
-		r = calloc(1, sizeof(struct region));
-		world_add_region(w, r);
-		puts("### ALLOCATING THE REGION FOR THE FIRST TIME ###");
-	}
-	FILE *f = fopen(LEVEL_PATH "/region/r.0.0.mca", "r");
-	if (f == NULL) {
-		fprintf(stderr, "error opening region file\n");
-		return -1;
-	}
-	/* TODO: don't load chunks here or like this pls thanks */
-	size_t chunk_buf_len = 0;
-	Bytef *chunk_buf = NULL;
-	for (int z = 0; z < 16; ++z) {
-		for (int x = 0; x < 16; ++x) {
-			struct chunk *chunk = r->chunks[z][x];
-			if (chunk == NULL) {
-				int uncompressed_len = read_chunk(f, x, z, &chunk_buf_len, &chunk_buf);
-				if (uncompressed_len > 0) {
-					chunk = parse_chunk(block_table, uncompressed_len, chunk_buf);
-					if (chunk == NULL) {
-						fprintf(stderr, "also panic\n");
-						return -1;
-					}
-				} else if (uncompressed_len < 0) {
-					fprintf(stderr, "fuckin panic");
-					return -1;
-				}
-			}
-
-			if (chunk != NULL) {
-				chunk_data(&conn, chunk, x, z, true);
-				r->chunks[z][x] = chunk;
-			}
-		}
-	}
-	fclose(f);
-	free(chunk_buf);
-
-	if (spawn_position(&conn, 0, 0, 0) < 0) {
-		fprintf(stderr, "error sending spawn position\n");
-		return 1;
-	}
-	int teleport_id;
-	if (player_position_look(&conn, &teleport_id) < 0) {
-		fprintf(stderr, "error sending position + look\n");
-		return 1;
-	}
-
-	struct player_info info = {0};
-	memcpy(info.uuid, conn.player->uuid, 16);
-	memcpy(info.add.username, conn.player->username, sizeof(char) * 16);
-	info.add.properties_len = 1;
-	struct player_info_property prop;
-	prop.name = "textures";
-	prop.value = conn.player->textures;
-	info.add.properties = &prop;
-	if (player_info(&conn, PLAYER_INFO_ADD_PLAYER, 1, &info) < 0) {
-		fprintf(stderr, "error sending player info\n");
-		return 1;
-	}
-
-	puts("sent all of the shit, just waiting on a teleport confirm");
-
-	struct pollfd pfd = { .fd = sfd, .events = POLLIN };
-
-	uint64_t keep_alive_id;
-	time_t keep_alive_time = 0;
-	time_t last_client_response = time(NULL);
-	for (;;) {
-		int polled = poll(&pfd, 1, 100);
-		if (polled > 0 && (pfd.revents & POLLIN)) {
-			int result = conn_packet_read_header(&conn);
-			if (result == 0) {
-				puts("client closed connection");
-				break;
-			} else if (result < 0) {
-				fprintf(stderr, "error parsing packet\n");
-				break;
-			}
-			switch (conn.packet->packet_id) {
-				case 0x00:
-					printf("teleport confirm: %d\n", teleport_confirm(conn.packet, teleport_id));
-					break;
-				case 0x0F:
-					if (keep_alive_serverbound(conn.packet, keep_alive_id) < 0)
-						break;
-					last_client_response = time(NULL);
-					break;
-				case 0x2C:
-					player_block_placement(conn.packet, w);
-					break;
-				default:
-					//printf("unimplemented packet 0x%02x\n", p.packet_id);
-					break;
-			}
-		} else if (polled < 0) {
-			perror("poll");
-			break;
-		}
-
-		if (time(NULL) - last_client_response >= 30) {
-			puts("client hasn't sent a keep alive in a while, disconnecting");
-			break;
-		}
-
-		if (time(NULL) - keep_alive_time > 15) {
-			if (keep_alive_clientbound(&conn, &keep_alive_time, &keep_alive_id) < 0) {
-				fprintf(stderr, "error sending keep alive\n");
-				break;
-			}
-		}
-	}
-
-	packet_free(conn.packet);
-	conn_finish(&conn);
-	return 0;
 }
