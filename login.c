@@ -255,17 +255,17 @@ void uuid_bytes(char uuid[33], uint8_t bytes[16]) {
 	BN_free(bn);
 }
 
-int login(struct conn *c, const uint8_t *pubkey_der, size_t pubkey_len, EVP_PKEY_CTX *decrypt_ctx) {
+int login(struct conn *c, struct login_ctx *l_ctx) {
 	c->player = calloc(1, sizeof(struct player));
 	if (login_start(c, c->player->username) < 0)
 		return -1;
 	uint8_t verify[4];
-	if (encryption_request(c, pubkey_len, pubkey_der, verify) < 0)
+	if (encryption_request(c, l_ctx->pubkey_len, l_ctx->pubkey, verify) < 0)
 		return -1;
 	uint8_t secret[16];
-	if (encryption_response(c, decrypt_ctx, verify, secret) < 0)
+	if (encryption_response(c, l_ctx->decrypt_ctx, verify, secret) < 0)
 		return -1;
-	char *hash = mc_hash(pubkey_len, pubkey_der, secret);
+	char *hash = mc_hash(l_ctx->pubkey_len, l_ctx->pubkey, secret);
 	if (!hash) {
 		fputs("error generating SHA1 hash", stderr);
 		return -1;

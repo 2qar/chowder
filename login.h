@@ -7,7 +7,13 @@
 
 #include "conn.h"
 
+struct login_ctx {
+	EVP_PKEY_CTX *decrypt_ctx;
+	size_t pubkey_len;
+	const uint8_t *pubkey;
+};
+
 int handle_server_list_ping(struct conn *);
-int login(struct conn *, const uint8_t *, size_t, EVP_PKEY_CTX *);
+int login(struct conn *, struct login_ctx *);
 
 #endif

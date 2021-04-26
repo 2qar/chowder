@@ -1,10 +1,12 @@
 #ifndef CHOWDER_WORLD_H
 #define CHOWDER_WORLD_H
 
+#include "include/hashmap.h"
 #include "include/linked_list.h"
 #include "region.h"
 
 struct world {
+	struct hashmap *block_table;
 	/* 2D linked-list of loaded regions */
 	struct node *regions;
 };

@@ -9,7 +9,7 @@
 /* TODO: make a config.h file or smth for these settings */
 #define LEVEL_PATH "levels/default"
 
-struct conn *server_handshake(int sfd, struct packet *p) {
+static struct conn *server_handshake(int sfd, struct packet *p) {
 	struct conn *conn = calloc(1, sizeof(struct conn));
 	conn->sfd = sfd;
 	conn->packet = p;
@@ -27,7 +27,7 @@ struct conn *server_handshake(int sfd, struct packet *p) {
 	}
 }
 
-int server_initialize_play_state(struct conn *conn, struct world *w, struct hashmap *block_table) {
+static int server_initialize_play_state(struct conn *conn, struct world *w) {
 	join_game(conn);
 	puts("joined the game");
 	if (client_settings(conn) < 0) {
@@ -62,7 +62,7 @@ int server_initialize_play_state(struct conn *conn, struct world *w, struct hash
 			if (chunk == NULL) {
 				int uncompressed_len = read_chunk(f, x, z, &chunk_buf_len, &chunk_buf);
 				if (uncompressed_len > 0) {
-					chunk = parse_chunk(block_table, uncompressed_len, chunk_buf);
+					chunk = parse_chunk(w->block_table, uncompressed_len, chunk_buf);
 					if (chunk == NULL) {
 						fprintf(stderr, "also panic\n");
 						return -1;
@@ -109,6 +109,27 @@ int server_initialize_play_state(struct conn *conn, struct world *w, struct hash
 
 	conn->last_pong = time(NULL);
 	return 0;
+}
+
+struct conn *server_accept_connection(int sfd, struct packet *p, struct world *w, struct login_ctx *l_ctx) {
+	struct conn *c = server_handshake(sfd, p);
+	if (c == NULL) {
+		close(sfd);
+		return NULL;
+	}
+	int err = login(c, l_ctx);
+	if (err < 0) {
+		// TODO: return meaningful errors instead of -1 everywhere
+		fprintf(stderr, "error logging in: %d\n", err);
+		conn_finish(c);
+		return NULL;
+	}
+	err = server_initialize_play_state(c, w);
+	if (err < 0) {
+		fprintf(stderr, "error switching to play state: %d\n", err);
+		return NULL;
+	}
+	return c;
 }
 
 int server_play(struct conn *conn, struct world *w) {

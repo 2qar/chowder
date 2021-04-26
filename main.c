@@ -69,6 +69,7 @@ int main() {
 		exit(EXIT_FAILURE);
 
 	struct world *w = world_new();
+	w->block_table = block_table;
 	struct node *connections = list_new();
 	struct packet packet;
 	packet_init(&packet);
@@ -81,24 +82,17 @@ int main() {
 		if (conn == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
 			perror("accept");
 		} else if (conn != -1) {
-			struct conn *c = server_handshake(conn, &packet);
-			if (c == NULL) {
-				close(conn);
-				goto loop_conns;
-			}
+			struct login_ctx l_ctx;
+			l_ctx.decrypt_ctx = ctx;
+			l_ctx.pubkey_len = der_len;
+			l_ctx.pubkey = der;
 
-			int err = login(c, der, der_len, ctx);
-			if (err < 0) {
-				// TODO: return meaningful errors instead of -1 everywhere
-				fprintf(stderr, "error logging in: %d\n", err);
-				conn_finish(c);
-			} else {
-				server_initialize_play_state(c, w, block_table);
+			struct conn *c = server_accept_connection(conn, &packet, w, &l_ctx);
+			if (c != NULL) {
 				list_append(connections, sizeof(struct conn *), &c);
 			}
 		}
 
-loop_conns:;
 		struct node *connection = connections;
 		while (!list_empty(connection)) {
 			int status = server_play(list_item(connection), w);
@@ -119,7 +113,7 @@ loop_conns:;
 	EVP_PKEY_CTX_free(ctx);
 	EVP_PKEY_free(pkey);
 	close(sfd);
-	hashmap_free(block_table, free);
+	world_free(w);
 
 	exit(EXIT_SUCCESS);
 }
