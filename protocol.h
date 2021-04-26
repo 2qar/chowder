@@ -59,6 +59,6 @@ int player_info(struct conn *, enum player_info_action, size_t players, struct p
 
 int player_position_look(struct conn *, int *teleport_id);
 int teleport_confirm(struct packet *, int server_teleport_id);
-int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id);
+int keep_alive_clientbound(struct conn *c);
 int keep_alive_serverbound(struct packet *p, uint64_t id);
 int player_block_placement(struct packet *, struct world *);

@@ -605,15 +605,15 @@ int teleport_confirm(struct packet *p, int server_teleport_id) {
 	return 0;
 }
 
-int keep_alive_clientbound(struct conn *c, time_t *t, uint64_t *id) {
+int keep_alive_clientbound(struct conn *c) {
 	make_packet(c->packet, 0x21);
 
-	*id = rand();
-	int n = packet_write_long(c->packet, *id);
+	c->keep_alive_id = rand();
+	int n = packet_write_long(c->packet, c->keep_alive_id);
 	if (n < 0) {
 		return n;
 	}
-	*t = time(NULL);
+	c->last_ping = time(NULL);
 
 	return conn_write_packet(c);
 }

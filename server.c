@@ -106,15 +106,12 @@ int server_initialize_play_state(struct conn *conn, struct world *w, struct hash
 	}
 
 	puts("sent all of the shit, just waiting on a teleport confirm");
+
+	conn->last_pong = time(NULL);
 	return 0;
 }
 
 int server_play(struct conn *conn, struct world *w) {
-	/* FIXME: store this info per-connection or things will break */
-	uint64_t keep_alive_id;
-	time_t keep_alive_time = 0;
-	time_t last_client_response = time(NULL);
-
 	struct pollfd pfd = { .fd = conn->sfd, .events = POLLIN };
 	int polled = poll(&pfd, 1, 100);
 	if (polled > 0 && (pfd.revents & POLLIN)) {
@@ -131,9 +128,9 @@ int server_play(struct conn *conn, struct world *w) {
 				printf("teleport confirm: %d\n", teleport_confirm(conn->packet, 123));
 				break;
 			case 0x0F:
-				if (keep_alive_serverbound(conn->packet, keep_alive_id) < 0)
+				if (keep_alive_serverbound(conn->packet, conn->keep_alive_id) < 0)
 					break;
-				last_client_response = time(NULL);
+				conn->last_pong = time(NULL);
 				break;
 			case 0x2C:
 				player_block_placement(conn->packet, w);
@@ -147,13 +144,13 @@ int server_play(struct conn *conn, struct world *w) {
 		return -1;
 	}
 
-	if (time(NULL) - last_client_response >= 30) {
+	if (time(NULL) - conn->last_pong >= 30) {
 		puts("client hasn't sent a keep alive in a while, disconnecting");
 		return 0;
 	}
 
-	if (time(NULL) - keep_alive_time > 15) {
-		if (keep_alive_clientbound(conn, &keep_alive_time, &keep_alive_id) < 0) {
+	if (time(NULL) - conn->last_ping > 15) {
+		if (keep_alive_clientbound(conn) < 0) {
 			fprintf(stderr, "error sending keep alive\n");
 			return -1;
 		}

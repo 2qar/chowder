@@ -2,6 +2,7 @@
 #define CHOWDER_CONN
 
 #include <stdint.h>
+#include <time.h>
 
 #include <openssl/evp.h>
 
@@ -14,6 +15,10 @@ struct conn {
 	EVP_CIPHER_CTX *_decrypt_ctx;
 	EVP_CIPHER_CTX *_encrypt_ctx;
 	struct player *player;
+
+	uint64_t keep_alive_id;
+	time_t last_ping;
+	time_t last_pong;
 };
 
 int conn_init(struct conn *, int, const uint8_t[16]);
