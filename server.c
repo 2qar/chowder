@@ -134,8 +134,8 @@ struct conn *server_accept_connection(int sfd, struct packet *p, struct world *w
 
 int server_play(struct conn *conn, struct world *w) {
 	struct pollfd pfd = { .fd = conn->sfd, .events = POLLIN };
-	int polled = poll(&pfd, 1, 0);
-	if (polled > 0 && (pfd.revents & POLLIN)) {
+	int polled;
+	while ((polled = poll(&pfd, 1, 0)) > 0 && (pfd.revents & POLLIN)) {
 		int result = conn_packet_read_header(conn);
 		if (result == 0) {
 			puts("client closed connection");
@@ -160,7 +160,8 @@ int server_play(struct conn *conn, struct world *w) {
 				//printf("unimplemented packet 0x%02x\n", p.packet_id);
 				break;
 		}
-	} else if (polled < 0) {
+	}
+	if (polled < 0) {
 		perror("poll");
 		return -1;
 	}
