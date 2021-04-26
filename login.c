@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -250,7 +251,7 @@ void format_uuid(char uuid[32], char formatted[37]) {
 void uuid_bytes(char uuid[33], uint8_t bytes[16]) {
 	BIGNUM *bn = BN_new();
 	BN_hex2bn(&bn, uuid);
-	/* FIXME: writing oob */
+	assert(BN_num_bytes(bn) == 16);
 	BN_bn2bin(bn, bytes);
 	BN_free(bn);
 }
@@ -270,7 +271,7 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 		fputs("error generating SHA1 hash", stderr);
 		return -1;
 	}
-	char uuid[32];
+	char uuid[33] = {0};
 	if (player_id(hash, uuid, c->player) < 0)
 		return -1;
 	free(hash);
