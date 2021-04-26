@@ -5,11 +5,11 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <poll.h>
 
 #include <openssl/evp.h>
 
@@ -28,6 +28,8 @@
 #define LEVEL_PATH "levels/default"
 
 #define BLOCKS_PATH "gamedata/blocks.json"
+
+#define TICK_LEN_NSEC 50000000
 
 static bool running = true;
 
@@ -74,9 +76,15 @@ int main() {
 	struct packet packet;
 	packet_init(&packet);
 
-	/* connection handling */
+	/* TODO: keep track of a "tick debt" so the server can catch up when a
+	 *       tick takes too long */
+	struct timespec tick_start_time;
+	struct timespec current_time;
 	while (running) {
-		/* FIXME: super high cpu usage, should probably tick */
+		if (clock_gettime(CLOCK_MONOTONIC, &tick_start_time) < 0) {
+			perror("clock_gettime");
+			break;
+		}
 
 		int conn = accept(sfd, NULL, NULL);
 		if (conn == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
@@ -103,6 +111,16 @@ int main() {
 			} else {
 				connection = list_next(connection);
 			}
+		}
+
+		if (clock_gettime(CLOCK_MONOTONIC, &current_time) < 0) {
+			perror("clock_gettime");
+			break;
+		} else if (current_time.tv_nsec - tick_start_time.tv_nsec < TICK_LEN_NSEC) {
+			struct timespec sleep_time = {0};
+			sleep_time.tv_nsec = TICK_LEN_NSEC - (current_time.tv_nsec - tick_start_time.tv_nsec);
+			/* TODO: handle interrupted sleep, probably */
+			clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_time, NULL);
 		}
 	}
 

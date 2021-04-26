@@ -134,7 +134,7 @@ struct conn *server_accept_connection(int sfd, struct packet *p, struct world *w
 
 int server_play(struct conn *conn, struct world *w) {
 	struct pollfd pfd = { .fd = conn->sfd, .events = POLLIN };
-	int polled = poll(&pfd, 1, 100);
+	int polled = poll(&pfd, 1, 0);
 	if (polled > 0 && (pfd.revents & POLLIN)) {
 		int result = conn_packet_read_header(conn);
 		if (result == 0) {
