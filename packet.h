@@ -50,6 +50,8 @@ int packet_read_header(struct packet *, int sfd);
 /* packet_read_byte() and the other primitive reads (packet_read_ushort(), etc.)
  * return false if there's no data left to be read. */
 bool packet_read_byte(struct packet *p, uint8_t *);
+bool packet_read_bytes(struct packet *, size_t buf_len, uint8_t *buf);
+bool packet_read_int(struct packet *, int32_t *);
 int packet_read_varint(struct packet *, int *);
 int packet_read_string(struct packet *, int buf_len, char *buf);
 bool packet_read_short(struct packet *, uint16_t *);

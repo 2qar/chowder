@@ -103,6 +103,27 @@ bool packet_read_byte(struct packet *p, uint8_t *b) {
 	return true;
 }
 
+bool packet_read_bytes(struct packet *p, size_t buf_len, uint8_t *buf) {
+	bool in_bounds = true;
+
+	size_t i = 0;
+	while (i < buf_len && in_bounds) {
+		in_bounds = packet_read_byte(p, buf + i);
+		++i;
+	}
+
+	if (!in_bounds)
+		buf[0] = buf[i];
+	return in_bounds;
+}
+
+bool packet_read_int(struct packet *p, int32_t *v) {
+	int32_t val;
+	bool in_bounds = packet_read_bytes(p, 4, (uint8_t *) &val);
+	*v = ntohl(val);
+	return in_bounds;
+}
+
 int packet_read_varint(struct packet *p, int *v) {
 	return read_varint_gen(&packet_buf_read_byte, (void *) p, v);
 }
