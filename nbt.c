@@ -14,7 +14,15 @@ struct nbt *nbt_new(enum tag t, char *name) {
 	if (name != NULL) {
 		root->name = strdup(name);
 	}
-	return root;
+	if (t != TAG_Compound) {
+		struct nbt *compound_root = calloc(1, sizeof(struct nbt));
+		compound_root->tag = TAG_Compound;
+		compound_root->data.children = list_new();
+		list_append(compound_root->data.children, sizeof(struct nbt *), &root);
+		return compound_root;
+	} else {
+		return root;
+	}
 }
 
 static void nbt_free_node_data(struct nbt *);

@@ -437,7 +437,8 @@ int chunk_data(struct conn *c, const struct chunk *chunk, int x, int y, bool ful
 	int64_t heightmaps[36] = {0};
 	arr->len = 36;
 	arr->data.longs = heightmaps;
-	nbt->data.array = arr;
+	struct nbt *motion_blocking = nbt_get(nbt, TAG_Long_Array, "MOTION_BLOCKING");
+	motion_blocking->data.array = arr;
 	n = packet_write_nbt(p, nbt);
 	arr->data.longs = NULL;
 	nbt_free(nbt);
