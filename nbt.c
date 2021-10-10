@@ -401,6 +401,10 @@ static size_t nbt_write_double(double d, uint8_t *data) {
 }
 
 static size_t nbt_write_string(const char *s, uint8_t *data) {
+	if (s == NULL) {
+		return nbt_write_short(0, data);
+	}
+
 	size_t len = 0;
 	size_t s_len = strlen(s);
 	len += nbt_write_short(s_len, data);
