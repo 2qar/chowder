@@ -5,7 +5,7 @@ LIBS=$(LIBSSL) -lm -lz
 TARGET=chowder
 
 $(TARGET): main.o protocol.o login.o conn.o packet.o player.o nbt.o region.o rsa.o section.o server.o blocks.o world.o include/linked_list.o include/hashmap.o
-	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 debug: CFLAGS += -g
 debug: $(TARGET)
