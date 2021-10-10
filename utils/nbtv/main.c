@@ -165,7 +165,8 @@ int main(int argc, char **argv)
 	fread(buf, 1, f_len, f);
 	fclose(f);
 
-	struct nbt *root = nbt_unpack(f_len, buf);
+	struct nbt *root;
+	nbt_unpack(f_len, buf, &root);
 	free(buf);
 	if (root == NULL) {
 		fprintf(stderr, "nbtv: invalid NBT\n");

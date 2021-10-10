@@ -294,7 +294,7 @@ static ssize_t nbt_unpack_node(struct nbt *root, size_t i, size_t len, const uin
 	return i + 1;
 }
 
-struct nbt *nbt_unpack(size_t len, const uint8_t *data) {
+size_t nbt_unpack(size_t len, const uint8_t *data, struct nbt **out) {
 	size_t i = 0;
 	char *root_name = NULL;
 	if (data[i] == TAG_Compound) {
@@ -302,11 +302,13 @@ struct nbt *nbt_unpack(size_t len, const uint8_t *data) {
 		i += nbt_read_string(&root_name, len - i, data + i);
 	}
 	struct nbt *root = nbt_new(TAG_Compound, root_name);
-	if (nbt_unpack_node(root, i, len, data) < 0) {
+	ssize_t nbt_len = nbt_unpack_node(root, i, len, data);
+	if (nbt_len < 0) {
 		nbt_free(root);
-		return NULL;
+		return 0;
 	}
-	return root;
+	*out = root;
+	return nbt_len;
 }
 
 static size_t nbt_data_len(struct nbt *);

@@ -56,6 +56,7 @@ int packet_read_varint(struct packet *, int *);
 int packet_read_string(struct packet *, int buf_len, char *buf);
 bool packet_read_short(struct packet *, uint16_t *);
 bool packet_read_long(struct packet *, uint64_t *);
+bool packet_read_nbt(struct packet *, struct nbt **);
 bool packet_read_position(struct packet *, int32_t *x, int16_t *y, int32_t *z);
 
 void make_packet(struct packet *, int);

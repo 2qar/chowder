@@ -170,6 +170,14 @@ bool packet_read_long(struct packet *p, uint64_t *l) {
 	return true;
 }
 
+bool packet_read_nbt(struct packet *p, struct nbt **nbt) {
+	// FIXME: better errors from this function, but first that requires
+	//        proper errors from the functions in nbt.h
+	size_t nbt_len = nbt_unpack(p->packet_len - p->index, p->data + p->index, nbt);
+	p->index += nbt_len;
+	return nbt_len != 0;
+}
+
 /* TODO: test w/ negative values if i ever get around to sending chunks w/
  *       negative coordinates xd */
 bool packet_read_position(struct packet *p, int32_t *x, int16_t *y, int32_t *z) {

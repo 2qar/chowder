@@ -61,7 +61,7 @@ struct nbt_list {
 struct nbt *nbt_new(enum tag, char *name);
 void nbt_free(struct nbt *);
 
-struct nbt *nbt_unpack(size_t len, const uint8_t *b);
+size_t nbt_unpack(size_t len, const uint8_t *b, struct nbt **out);
 size_t nbt_pack(struct nbt *, uint8_t **b);
 
 /* returns direct children only */

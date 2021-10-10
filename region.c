@@ -167,8 +167,9 @@ void build_palette(struct hashmap *block_table, struct section *s, struct nbt_li
 struct chunk *parse_chunk(struct hashmap *block_table, size_t chunk_data_len, uint8_t *chunk_data) {
 	struct chunk *c = malloc(sizeof(struct chunk));
 
-	struct nbt *n = nbt_unpack(chunk_data_len, chunk_data);
-	if (n == NULL) {
+	struct nbt *n;
+	size_t n_len = nbt_unpack(chunk_data_len, chunk_data, &n);
+	if (n_len == 0) {
 		fprintf(stderr, "fuck\n");
 		return NULL;
 	}
