@@ -117,7 +117,7 @@ int packet_read_string(struct packet *p, int buf_len, char *buf) {
 		++i;
 
 	if (i != len)
-		return -1;
+		return PACKET_STRING_TOO_LONG;
 
 	buf[i] = 0;
 	return i;

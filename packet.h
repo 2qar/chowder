@@ -10,6 +10,7 @@
 #define PACKET_VARINT_TOO_LONG -2
 #define PACKET_TOO_BIG         -3
 #define PACKET_REALLOC_FAILED  -4
+#define PACKET_STRING_TOO_LONG -5
 
 typedef bool (*read_byte_func)(void *src, uint8_t *b);
 
