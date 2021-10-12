@@ -26,5 +26,7 @@ struct node *list_next(struct node *list);
 struct node *list_find(struct node *list, bool (*equal)(void *, void *), void *item);
 int list_len(struct node *list);
 void list_free(struct node *list);
+/* clean up the list without free()'ing the data */
+void list_free_nodes(struct node *list);
 
 #endif

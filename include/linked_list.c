@@ -12,6 +12,10 @@ void list_prepend(struct node *list, size_t data_len, void *data) {
 	struct node *tmp = malloc(sizeof(struct node));
 	memcpy(tmp, list, sizeof(struct node));
 
+	// FIXME: i see no reason why this can't just be
+	//           list->data = data;
+	//        when list_prepend() and list_append() are documented
+	//        to only allow heap-allocated objects as the data param
 	memcpy(&(list->data), data, data_len);
 	list->next = tmp;
 }
@@ -76,6 +80,15 @@ int list_len(struct node *list) {
 void list_free(struct node *list) {
 	while (!list_empty(list)) {
 		free(list_remove(list));
+	}
+	free(list);
+}
+
+void list_free_nodes(struct node *list) {
+	while (!list_empty(list)) {
+		struct node *next = list_next(list);
+		free(list);
+		list = next;
 	}
 	free(list);
 }
