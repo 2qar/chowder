@@ -40,7 +40,7 @@ struct http_uri *http_parse_uri(const char *uri_str)
 		if (port_len > 5) {
 			return NULL;
 		}
-		int n = sscanf(host_end + 1, "%hd", &port);
+		int n = sscanf(host_end + 1, "%hu", &port);
 		if (n != 1) {
 			return NULL;
 		}
