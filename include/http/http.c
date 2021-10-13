@@ -56,6 +56,10 @@ struct http_uri *http_parse_uri(const char *uri_str)
 	struct http_uri *uri = calloc(1, sizeof(struct http_uri));
 	uri->host = host;
 	uri->port = port;
-	uri->abs_path = abs_path;
+	if (!abs_path) {
+		uri->abs_path = strdup("/");
+	} else {
+		uri->abs_path = abs_path;
+	}
 	return uri;
 }
