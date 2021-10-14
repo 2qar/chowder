@@ -47,6 +47,7 @@ int main()
 		"http:/example.com",
 		"http://www.example.com/",
 		"bla",
+		"badscheme://example.com",
 	};
 	size_t uri_strings_len = sizeof(uri_strings) / sizeof(char *);
 	struct http_uri expected[] = {
@@ -58,6 +59,7 @@ int main()
 		{ 0 },
 		{ 0 },
 		{ .host = "www.example.com", .port = 80, .abs_path = "/" },
+		{ 0 },
 		{ 0 },
 	};
 

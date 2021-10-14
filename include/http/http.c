@@ -17,6 +17,10 @@ struct http_uri *http_parse_uri(const char *uri_str)
 	if (!scheme_end || strncmp(scheme_end, "://", 3)) {
 		return NULL;
 	}
+	size_t scheme_len = scheme_end - uri_str;
+	if (scheme_len > 5 || (scheme_len == 5 && scheme_end[-1] != 's')) {
+		return NULL;
+	}
 	char *host_begin = scheme_end + 3;
 	char *host_end = strpbrk(host_begin, ":/");
 	if (!host_end) {
