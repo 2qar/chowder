@@ -1,25 +1,26 @@
 #include "http.h"
 
+#include <assert.h>
 #include <ctype.h>
 #include <strings.h>
 #include <string.h>
 
-struct http_uri *http_parse_uri(const char *uri_str)
+http_uri_parse_err http_parse_uri(const char *uri_str, struct http_uri *uri)
 {
 	char *host = NULL;
 	uint16_t port = 80;
 	char *abs_path = NULL;
 
 	if (strncmp(uri_str, "http", 4)) {
-		return NULL;
+		return HTTP_URI_BAD_SCHEME;
 	}
 	char *scheme_end = index(uri_str, ':');
 	if (!scheme_end || strncmp(scheme_end, "://", 3)) {
-		return NULL;
+		return HTTP_URI_BAD_SCHEME;
 	}
 	size_t scheme_len = scheme_end - uri_str;
 	if (scheme_len > 5 || (scheme_len == 5 && scheme_end[-1] != 's')) {
-		return NULL;
+		return HTTP_URI_BAD_SCHEME;
 	}
 	char *host_begin = scheme_end + 3;
 	char *host_end = strpbrk(host_begin, ":/");
@@ -38,16 +39,13 @@ struct http_uri *http_parse_uri(const char *uri_str)
 			++port_end;
 		}
 		if (port_end == host_end + 1) {
-			return NULL;
+			return HTTP_URI_PORT_EXPECTED;
 		}
 		port_len = port_end - (host_end + 1);
 		if (port_len > 5) {
-			return NULL;
+			return HTTP_URI_PORT_TOO_BIG;
 		}
-		int n = sscanf(host_end + 1, "%hu", &port);
-		if (n != 1) {
-			return NULL;
-		}
+		assert(sscanf(host_end + 1, "%hu", &port) == 1);
 	}
 	char *abs_path_begin = host_end;
 	if (port_len) {
@@ -57,7 +55,6 @@ struct http_uri *http_parse_uri(const char *uri_str)
 		abs_path = strdup(abs_path_begin);
 	}
 
-	struct http_uri *uri = calloc(1, sizeof(struct http_uri));
 	uri->host = host;
 	uri->port = port;
 	if (!abs_path) {
@@ -65,5 +62,5 @@ struct http_uri *http_parse_uri(const char *uri_str)
 	} else {
 		uri->abs_path = abs_path;
 	}
-	return uri;
+	return HTTP_URI_OK;
 }

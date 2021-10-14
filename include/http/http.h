@@ -13,6 +13,13 @@ struct http_uri {
 	char *abs_path;
 };
 
+typedef enum {
+	HTTP_URI_OK,
+	HTTP_URI_BAD_SCHEME,
+	HTTP_URI_PORT_EXPECTED,
+	HTTP_URI_PORT_TOO_BIG,
+} http_uri_parse_err;
+
 struct http_message {
 	struct hashmap *message_headers;
 	size_t message_length;
@@ -31,7 +38,7 @@ struct http_response {
 	struct hashmap *response_headers;
 };
 
-struct http_uri *http_parse_uri(const char *uri);
+http_uri_parse_err http_parse_uri(const char *uri, struct http_uri *);
 struct http_response http_get(const struct http_uri *, const struct http_message *);
 struct http_response https_get(SSL_CTX *, const struct http_uri *, const struct http_message *);
 
