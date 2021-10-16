@@ -3,8 +3,8 @@
 #ifndef CHOWDER_HTTP_H
 #define CHOWDER_HTTP_H
 
+#include "hashmap.h"
 #include <stdint.h>
-
 #include <openssl/ssl.h>
 
 struct http_uri {
@@ -23,23 +23,25 @@ typedef enum {
 struct http_message {
 	struct hashmap *message_headers;
 	size_t message_length;
-	uint8_t *message_body;
+	char *message_body;
 };
 
 struct http_request {
+	struct http_uri *request_uri;
 	char *request_method;
 	struct hashmap *request_headers;
-	struct http_message request_message;
+	struct http_message *request_message;
 };
 
 struct http_response {
 	unsigned response_status_code;
 	char *response_reason;
 	struct hashmap *response_headers;
+	struct http_message *response_message;
 };
 
 http_uri_parse_err http_parse_uri(const char *uri, struct http_uri *);
 struct http_response http_get(const struct http_uri *, const struct http_message *);
-struct http_response https_get(SSL_CTX *, const struct http_uri *, const struct http_message *);
+struct http_response *https_get(SSL_CTX *, const struct http_request *);
 
 #endif // CHOWDER_HTTP_H
