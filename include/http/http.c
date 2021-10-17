@@ -11,6 +11,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#define CHUNK_SIZE 4096
+
 http_uri_parse_err http_parse_uri(const char *uri_str, struct http_uri *uri)
 {
 	char *host = NULL;
@@ -264,19 +266,24 @@ struct http_response *https_get(SSL_CTX *ssl_ctx, const struct http_request *req
 		// FIXME: maybe take an http_ctx arg and attach errors to that?
 		return NULL;
 	}
-	buf[n] = '\0';
-	// FIXME: this is always 0? figure out a better way to read the whole
-	//        message, dummy
-	size_t pending = SSL_pending(ssl);
-	if (pending > buf_len) {
-		buf_len = pending;
-		buf = realloc(buf, buf_len);
+	buf_len = CHUNK_SIZE;
+	buf = reallocarray(buf, buf_len, sizeof(char));
+	size_t i = 0;
+	while ((n = SSL_read(ssl, buf + i, (buf_len - i) * sizeof(char))) > 0) {
+		i += n;
+		if (i == buf_len) {
+			buf_len += CHUNK_SIZE;
+			buf = reallocarray(buf, buf_len, sizeof(char));
+		}
 	}
-	n = SSL_read(ssl, buf, buf_len);
-	if (n <= 0) {
-		// FIXME: see above
+	int ssl_err = SSL_get_error(ssl, n);
+	if (ssl_err != SSL_ERROR_NONE && ssl_err != SSL_ERROR_ZERO_RETURN) {
 		return NULL;
 	}
+	if (i == buf_len) {
+		buf = reallocarray(buf, buf_len + 1, sizeof(char));
+	}
+	buf[i] = '\0';
 	SSL_shutdown(ssl);
 	close(sfd);
 	SSL_free(ssl);
