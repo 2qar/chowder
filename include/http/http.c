@@ -108,6 +108,8 @@ static size_t make_request_string(const struct http_request *request, char **req
 	size_t request_str_len = strlen("GET") + 2 + strlen("HTTP/1.1\r\n");
 	request_str_len += strlen(request->request_uri->abs_path);
 	request_str_len += strlen("Host: \r\n") + strlen(request->request_uri->host);
+	// FIXME: support persistent connections, maybe
+	request_str_len += strlen("Connection: close\r\n");
 	struct node *headers = hashmap_entries(request->request_headers);
 	struct node *h = headers;
 	while (!list_empty(h)) {
@@ -128,6 +130,7 @@ static size_t make_request_string(const struct http_request *request, char **req
 
 	size_t n = sprintf(buf, "GET %s HTTP/1.1\r\n", request->request_uri->abs_path);
 	n += sprintf(buf + n, "Host: %s\r\n", request->request_uri->host);
+	n += sprintf(buf + n, "Connection: close\r\n");
 	h = headers;
 	while (!list_empty(h)) {
 		struct bucket_entry *b = list_item(h);
