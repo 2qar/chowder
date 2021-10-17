@@ -200,12 +200,13 @@ static struct http_response *parse_response_string(char *response_str)
 		return NULL;
 	}
 	struct hashmap *headers = hashmap_new(headers_len);
-	header = response_str + reason_end;
+	header = response_str + reason_end + 2;
 	while (strncmp(header, "\r\n", 2)) {
 		char *value_start = index(header, ':') + 1;
 		char *value_end = index(value_start, '\r');
-		hashmap_add(headers, strndup(header, value_start - header),
-				strndup(value_start, value_end - value_start));
+		char *key = strndup(header, value_start - 1 - header);
+		// FIXME: strip trailing whitespace from values
+		hashmap_add(headers, key, strndup(value_start, value_end - value_start));
 		header = strstr(header, "\r\n") + 2;
 	}
 	char *response_body_start = header + 2;
