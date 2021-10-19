@@ -30,6 +30,9 @@ http_uri_parse_err http_parse_uri(const char *uri_str, struct http_uri *uri)
 	if (scheme_len > 5 || (scheme_len == 5 && scheme_end[-1] != 's')) {
 		return HTTP_URI_BAD_SCHEME;
 	}
+	if (scheme_len == 5) {
+		port = 443;
+	}
 	char *host_begin = scheme_end + 3;
 	char *host_end = strpbrk(host_begin, ":/");
 	if (!host_end) {

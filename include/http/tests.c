@@ -75,7 +75,7 @@ static void test_http_parse_uri()
 		{ .host = "example.com", .port = 80, .abs_path = "/" },
 		{ .host = "example.com", .port = 80, .abs_path = "/" },
 		{ .host = "example.com", .port = 42, .abs_path = "/" },
-		{ .host = "example.com", .port = 80, .abs_path = "/" },
+		{ .host = "example.com", .port = 443, .abs_path = "/" },
 		{ 0 },
 		{ 0 },
 		{ 0 },
@@ -109,7 +109,6 @@ static void test_https_get()
 {
 	struct http_uri uri;
 	http_parse_uri("https://github.com/BigHeadGeorge/", &uri);
-	uri.port = 443;
 	SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
 	struct http_request request = {0};
 	request.request_uri = &uri;
