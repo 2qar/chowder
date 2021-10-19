@@ -114,8 +114,11 @@ static void test_https_get()
 	request.request_uri = &uri;
 	request.request_headers = hashmap_new(20);
 	hashmap_add(request.request_headers, "User-Agent", "chowder-http-lib/1.0");
-	struct http_response *response = https_get(ssl_ctx, &request);
-	printf("%d", response->response_status_code);
+	struct http_response response = {0};
+	http_err err = https_get(ssl_ctx, &request, &response);
+	assert(err == HTTP_OK);
+	// TODO: make some status code constants
+	assert(response.response_status_code == 200);
 	return;
 }
 

@@ -76,8 +76,6 @@ http_uri_parse_err http_parse_uri(const char *uri_str, struct http_uri *uri)
 	return HTTP_URI_OK;
 }
 
-// FIXME: name sux
-// FIXME: errors!!!!!
 static int connect_to_resource(const struct http_uri *uri)
 {
 	struct addrinfo hints = {0};
@@ -86,23 +84,45 @@ static int connect_to_resource(const struct http_uri *uri)
 
 	struct addrinfo *res;
 	int err = getaddrinfo(uri->host, "www", &hints, &res);
-	if (err != 0) {
-		fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(err));
-		return -1;
-	} else if (res == NULL) {
-		fprintf(stderr, "no results found by getaddrinfo()\n");
-		return -1;
+	// FIXME: handle EAI_AGAIN
+	switch (err) {
+		case 0:
+			break;
+		case EAI_FAMILY:
+			return HTTP_HOST_NOT_SUPPORTED;
+		case EAI_NONAME:
+			return HTTP_HOST_NOT_FOUND;
+		case EAI_MEMORY:
+			return HTTP_NO_MEM;
+		default:
+			return HTTP_ABANDON_HOPE;
+	}
+	if (!res) {
+		return HTTP_HOST_NOT_FOUND;
 	}
 	int sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (sfd == -1) {
-		perror("socket");
-		return -1;
+		switch (errno) {
+			case ENOBUFS:
+			case ENOMEM:
+				return HTTP_NO_MEM;
+			default:
+				return HTTP_ABANDON_HOPE;
+		}
 	}
 	struct sockaddr_in *addr = (struct sockaddr_in *) res->ai_addr;
 	addr->sin_port = htons(uri->port);
 	if (connect(sfd, res->ai_addr, res->ai_addrlen) == -1) {
-		perror("connect");
-		return -1;
+		switch (errno) {
+			case ECONNREFUSED:
+				return HTTP_CONNECTION_REFUSED;
+			case ENETUNREACH:
+				return HTTP_NO_NETWORK;
+			case ETIMEDOUT:
+				return HTTP_TIMED_OUT;
+			default:
+				return HTTP_ABANDON_HOPE;
+		}
 	}
 	freeaddrinfo(res);
 	return sfd;
@@ -162,13 +182,12 @@ static size_t digits(int n)
 }
 
 // FIXME: be more careful while parsing so malformed responses get caught
-// FIXME: errors!!!
-static struct http_response *parse_response_string(char *response_str)
+http_err parse_response_string(char *response_str, struct http_response *response)
 {
 	int version_major, version_minor, status_code;
 	int n = sscanf(response_str, "HTTP/%d.%d %d ", &version_major, &version_minor, &status_code);
 	if (n != 3) {
-		return NULL;
+		return HTTP_BAD_RESPONSE;
 	}
 	size_t reason_start = strlen("HTTP/.  ") + digits(version_major)
 		+ digits(version_minor) + digits(status_code);
@@ -178,11 +197,11 @@ static struct http_response *parse_response_string(char *response_str)
 		++reason_end;
 	}
 	if (reason_end == reason_start || response_str[reason_end] == '\0') {
-		return NULL;
+		return HTTP_BAD_RESPONSE;
 	}
 	char *header = response_str + reason_end;
 	if (header[1] == '\0') {
-		return NULL;
+		return HTTP_BAD_RESPONSE;
 	}
 	header += 2;
 	// TODO: The headers probably shouldn't all be lumped together; the HTTP
@@ -200,7 +219,7 @@ static struct http_response *parse_response_string(char *response_str)
 		}
 	}
 	if (!header) {
-		return NULL;
+		return HTTP_BAD_RESPONSE;
 	}
 	struct hashmap *headers = hashmap_new(headers_len);
 	header = response_str + reason_end + 2;
@@ -223,7 +242,6 @@ static struct http_response *parse_response_string(char *response_str)
 	char *reason = calloc(reason_len + 1, sizeof(char));
 	memcpy(reason, &response_str[reason_start], reason_len);
 
-	struct http_response *response = malloc(sizeof(struct http_response));
 	response->response_status_code = status_code;
 	response->response_reason = reason;
 	response->response_headers = headers;
@@ -232,21 +250,21 @@ static struct http_response *parse_response_string(char *response_str)
 	response->response_message->message_headers = NULL;
 	response->response_message->message_length = response_body_len;
 	response->response_message->message_body = response_body;
-	return response;
+	return HTTP_OK;
 }
 
-// FIXME: errors!!!
-struct http_response *https_get(SSL_CTX *ssl_ctx, const struct http_request *request)
+// FIXME: come up with some actual errors for SSL errors
+http_err https_get(SSL_CTX *ssl_ctx, const struct http_request *request, struct http_response *response)
 {
 	int sfd = connect_to_resource(request->request_uri);
 	SSL *ssl = SSL_new(ssl_ctx);
 	if (ssl == NULL) {
 		fprintf(stderr, "SSL_new(): %ld\n", ERR_get_error());
-		return NULL;
+		return HTTP_ABANDON_HOPE;
 	}
 	if (!SSL_set_fd(ssl, sfd)) {
 		fprintf(stderr, "SSL_set_fd(): %ld\n", ERR_get_error());
-		return NULL;
+		return HTTP_ABANDON_HOPE;
 	}
 
 	int err = SSL_connect(ssl);
@@ -255,20 +273,20 @@ struct http_response *https_get(SSL_CTX *ssl_ctx, const struct http_request *req
 		char err_str[256];
 		ERR_error_string(ERR_get_error(), err_str);
 		printf("error: %s\n", err_str);
-		return NULL;
+		return HTTP_ABANDON_HOPE;
 	}
 
 	char *buf;
 	size_t buf_len;
 	size_t request_str_len = make_request_string(request, &buf);
 	if (!request_str_len) {
-		return NULL;
+		return HTTP_NO_MEM;
 	}
 	buf_len = request_str_len;
 	size_t n = SSL_write(ssl, buf, buf_len);
 	if (n <= 0) {
 		// FIXME: maybe take an http_ctx arg and attach errors to that?
-		return NULL;
+		return HTTP_ABANDON_HOPE;
 	}
 	buf_len = CHUNK_SIZE;
 	buf = reallocarray(buf, buf_len, sizeof(char));
@@ -282,7 +300,7 @@ struct http_response *https_get(SSL_CTX *ssl_ctx, const struct http_request *req
 	}
 	int ssl_err = SSL_get_error(ssl, n);
 	if (ssl_err != SSL_ERROR_NONE && ssl_err != SSL_ERROR_ZERO_RETURN) {
-		return NULL;
+		return HTTP_ABANDON_HOPE;
 	}
 	if (i == buf_len) {
 		buf = reallocarray(buf, buf_len + 1, sizeof(char));
@@ -292,6 +310,5 @@ struct http_response *https_get(SSL_CTX *ssl_ctx, const struct http_request *req
 	close(sfd);
 	SSL_free(ssl);
 
-	struct http_response *response = parse_response_string(buf);
-	return response;
+	return parse_response_string(buf, response);
 }
