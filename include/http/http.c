@@ -231,16 +231,17 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 		hashmap_add(headers, key, strndup(value_start, value_end - value_start));
 		header = strstr(header, "\r\n") + 2;
 	}
+	size_t reason_len = reason_end - reason_start;
+	char *reason = calloc(reason_len + 1, sizeof(char));
+	memcpy(reason, &response_str[reason_start], reason_len);
+
 	char *response_body_start = header + 2;
 	size_t response_body_len = strlen(response_body_start);
 	char *response_body = NULL;
 	if (response_body_len != 0) {
-		response_body = calloc(response_body_len + 1, sizeof(char));
-		memcpy(response_body, response_body_start, response_body_len);
+		response_body = memmove(response_str, response_body_start, response_body_len);
+		response_body[response_body_len] = '\0';
 	}
-	size_t reason_len = reason_end - reason_start;
-	char *reason = calloc(reason_len + 1, sizeof(char));
-	memcpy(reason, &response_str[reason_start], reason_len);
 
 	response->response_status_code = status_code;
 	response->response_reason = reason;
