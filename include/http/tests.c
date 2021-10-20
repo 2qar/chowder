@@ -110,12 +110,14 @@ static void test_https_get()
 	struct http_uri uri;
 	http_parse_uri("https://github.com/BigHeadGeorge/", &uri);
 	SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
+	struct http_ctx ctx = {0};
+	ctx.ssl_ctx = ssl_ctx;
 	struct http_request request = {0};
 	request.request_uri = &uri;
 	request.request_headers = hashmap_new(20);
 	hashmap_add(request.request_headers, "User-Agent", "chowder-http-lib/1.0");
 	struct http_response response = {0};
-	http_err err = https_get(ssl_ctx, &request, &response);
+	http_err err = https_get(&ctx, &request, &response);
 	assert(err == HTTP_OK);
 	// TODO: make some status code constants
 	assert(response.response_status_code == 200);

@@ -254,26 +254,24 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 }
 
 // FIXME: come up with some actual errors for SSL errors
-http_err https_get(SSL_CTX *ssl_ctx, const struct http_request *request, struct http_response *response)
+http_err https_get(struct http_ctx *ctx, const struct http_request *request, struct http_response *response)
 {
 	int sfd = connect_to_resource(request->request_uri);
-	SSL *ssl = SSL_new(ssl_ctx);
+	SSL *ssl = SSL_new(ctx->ssl_ctx);
 	if (ssl == NULL) {
-		fprintf(stderr, "SSL_new(): %ld\n", ERR_get_error());
-		return HTTP_ABANDON_HOPE;
+		ctx->err_errno = ERR_get_error();
+		return HTTP_SSL_GENERAL_ERR;
 	}
 	if (!SSL_set_fd(ssl, sfd)) {
-		fprintf(stderr, "SSL_set_fd(): %ld\n", ERR_get_error());
-		return HTTP_ABANDON_HOPE;
+		ctx->err_errno = ERR_get_error();
+		return HTTP_SSL_GENERAL_ERR;
 	}
 
 	int err = SSL_connect(ssl);
 	if (err <= 0) {
-		fprintf(stderr, "SSL_connect(): %d\n", SSL_get_error(ssl, err));
-		char err_str[256];
-		ERR_error_string(ERR_get_error(), err_str);
-		printf("error: %s\n", err_str);
-		return HTTP_ABANDON_HOPE;
+		ctx->ssl_errno = SSL_get_error(ssl, err);
+		ctx->ssl_err_func_name = "SSL_connect";
+		return HTTP_SSL_ERR;
 	}
 
 	char *buf;
@@ -285,8 +283,9 @@ http_err https_get(SSL_CTX *ssl_ctx, const struct http_request *request, struct 
 	buf_len = request_str_len;
 	size_t n = SSL_write(ssl, buf, buf_len);
 	if (n <= 0) {
-		// FIXME: maybe take an http_ctx arg and attach errors to that?
-		return HTTP_ABANDON_HOPE;
+		ctx->ssl_errno = SSL_get_error(ssl, n);
+		ctx->ssl_err_func_name = "SSL_write";
+		return HTTP_SSL_ERR;
 	}
 	buf_len = CHUNK_SIZE;
 	buf = reallocarray(buf, buf_len, sizeof(char));
@@ -300,7 +299,9 @@ http_err https_get(SSL_CTX *ssl_ctx, const struct http_request *request, struct 
 	}
 	int ssl_err = SSL_get_error(ssl, n);
 	if (ssl_err != SSL_ERROR_NONE && ssl_err != SSL_ERROR_ZERO_RETURN) {
-		return HTTP_ABANDON_HOPE;
+		ctx->ssl_errno = ssl_err;
+		ctx->ssl_err_func_name = "SSL_read";
+		return HTTP_SSL_ERR;
 	}
 	if (i == buf_len) {
 		buf = reallocarray(buf, buf_len + 1, sizeof(char));
