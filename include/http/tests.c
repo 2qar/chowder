@@ -117,22 +117,22 @@ static void test_https_get()
 	struct http_ctx ctx = {0};
 	ctx.ssl_ctx = ssl_ctx;
 	struct http_request request = {0};
-	request.request_uri = &uri;
-	request.request_headers = hashmap_new(20);
-	hashmap_add(request.request_headers, "User-Agent", "chowder-http-lib/1.0");
+	request.uri = &uri;
+	request.headers = hashmap_new(20);
+	hashmap_add(request.headers, "User-Agent", "chowder-http-lib/1.0");
 	struct http_response response = {0};
 	http_err err = https_get(&ctx, &request, &response);
 	assert(err == HTTP_OK);
 	// TODO: make some status code constants
-	assert(response.response_status_code == 200);
+	assert(response.status_code == 200);
 	SSL_CTX_free(ssl_ctx);
 	// TODO: make some free functions, cus this is ugly
-	free(response.response_message->message_body);
-	free(response.response_message);
-	free(response.response_reason);
-	hashmap_free(response.response_headers, free);
-	hashmap_remove(request.request_headers, "User-Agent");
-	hashmap_free(request.request_headers, free);
+	free(response.message->body);
+	free(response.message);
+	free(response.reason);
+	hashmap_free(response.headers, free);
+	hashmap_remove(request.headers, "User-Agent");
+	hashmap_free(request.headers, free);
 	free(uri.host);
 	free(uri.abs_path);
 	return;

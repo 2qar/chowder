@@ -130,11 +130,11 @@ static int connect_to_resource(const struct http_uri *uri)
 static size_t make_request_string(const struct http_request *request, char **request_str)
 {
 	size_t request_str_len = strlen("GET") + 2 + strlen("HTTP/1.1\r\n");
-	request_str_len += strlen(request->request_uri->abs_path);
-	request_str_len += strlen("Host: \r\n") + strlen(request->request_uri->host);
+	request_str_len += strlen(request->uri->abs_path);
+	request_str_len += strlen("Host: \r\n") + strlen(request->uri->host);
 	// FIXME: support persistent connections, maybe
 	request_str_len += strlen("Connection: close\r\n");
-	struct node *headers = hashmap_entries(request->request_headers);
+	struct node *headers = hashmap_entries(request->headers);
 	struct node *h = headers;
 	while (!list_empty(h)) {
 		struct bucket_entry *b = list_item(h);
@@ -142,8 +142,8 @@ static size_t make_request_string(const struct http_request *request, char **req
 		h = list_next(h);
 	}
 	request_str_len += strlen("\r\n");
-	if (request->request_message) {
-		 request_str_len += request->request_message->message_length;
+	if (request->message) {
+		 request_str_len += request->message->body_len;
 	}
 
 	char *buf = calloc(request_str_len + 1, sizeof(char));
@@ -152,8 +152,8 @@ static size_t make_request_string(const struct http_request *request, char **req
 	}
 	*request_str = buf;
 
-	size_t n = sprintf(buf, "GET %s HTTP/1.1\r\n", request->request_uri->abs_path);
-	n += sprintf(buf + n, "Host: %s\r\n", request->request_uri->host);
+	size_t n = sprintf(buf, "GET %s HTTP/1.1\r\n", request->uri->abs_path);
+	n += sprintf(buf + n, "Host: %s\r\n", request->uri->host);
 	n += sprintf(buf + n, "Connection: close\r\n");
 	h = headers;
 	while (!list_empty(h)) {
@@ -163,9 +163,9 @@ static size_t make_request_string(const struct http_request *request, char **req
 	}
 	list_free_nodes(headers);
 	n += sprintf(buf + n, "\r\n");
-	if (request->request_message && request->request_message->message_length > 0) {
-		memcpy(buf + n, request->request_message->message_body, request->request_message->message_length);
-		n += request->request_message->message_length;
+	if (request->message && request->message->body_len > 0) {
+		memcpy(buf + n, request->message->body, request->message->body_len);
+		n += request->message->body_len;
 	}
 	return n;
 }
@@ -245,21 +245,21 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 		response_body[response_body_len] = '\0';
 	}
 
-	response->response_status_code = status_code;
-	response->response_reason = reason;
-	response->response_headers = headers;
-	response->response_message = malloc(sizeof(struct http_message));
+	response->status_code = status_code;
+	response->reason = reason;
+	response->headers = headers;
+	response->message = malloc(sizeof(struct http_message));
 	// FIXME: read that todo above about the headers
-	response->response_message->message_headers = NULL;
-	response->response_message->message_length = response_body_len;
-	response->response_message->message_body = response_body;
+	response->message->headers = NULL;
+	response->message->body_len = response_body_len;
+	response->message->body = response_body;
 	return HTTP_OK;
 }
 
 // FIXME: come up with some actual errors for SSL errors
 http_err https_get(struct http_ctx *ctx, const struct http_request *request, struct http_response *response)
 {
-	int sfd = connect_to_resource(request->request_uri);
+	int sfd = connect_to_resource(request->uri);
 	SSL *ssl = SSL_new(ctx->ssl_ctx);
 	if (ssl == NULL) {
 		ctx->err_errno = ERR_get_error();

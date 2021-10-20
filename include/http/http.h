@@ -36,23 +36,23 @@ typedef enum {
 } http_err;
 
 struct http_message {
-	struct hashmap *message_headers;
-	size_t message_length;
-	char *message_body;
+	struct hashmap *headers;
+	size_t body_len;
+	char *body;
 };
 
 struct http_request {
-	struct http_uri *request_uri;
-	char *request_method;
-	struct hashmap *request_headers;
-	struct http_message *request_message;
+	struct http_uri *uri;
+	char *method;
+	struct hashmap *headers;
+	struct http_message *message;
 };
 
 struct http_response {
-	unsigned response_status_code;
-	char *response_reason;
-	struct hashmap *response_headers;
-	struct http_message *response_message;
+	unsigned status_code;
+	char *reason;
+	struct hashmap *headers;
+	struct http_message *message;
 };
 
 struct http_ctx {
