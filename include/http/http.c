@@ -256,7 +256,6 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 	return HTTP_OK;
 }
 
-// FIXME: come up with some actual errors for SSL errors
 http_err https_get(struct http_ctx *ctx, const struct http_request *request, struct http_response *response)
 {
 	int sfd = connect_to_resource(request->uri);
