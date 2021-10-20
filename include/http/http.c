@@ -13,6 +13,15 @@
 
 #define CHUNK_SIZE 4096
 
+void http_request_init(struct http_request *request, struct http_uri *uri)
+{
+	request->uri = uri;
+	request->method = HTTP_METHOD_GET;
+	// FIXME: hashmap should dynamically grow
+	request->headers = hashmap_new(20);
+	request->message = NULL;
+}
+
 http_uri_parse_err http_parse_uri(const char *uri_str, struct http_uri *uri)
 {
 	char *host = NULL;
@@ -129,7 +138,7 @@ static int connect_to_resource(const struct http_uri *uri)
 
 static size_t make_request_string(const struct http_request *request, char **request_str)
 {
-	size_t request_str_len = strlen("GET") + 2 + strlen("HTTP/1.1\r\n");
+	size_t request_str_len = strlen(request->method) + 2 + strlen("HTTP/1.1\r\n");
 	request_str_len += strlen(request->uri->abs_path);
 	request_str_len += strlen("Host: \r\n") + strlen(request->uri->host);
 	// FIXME: support persistent connections, maybe
@@ -152,7 +161,7 @@ static size_t make_request_string(const struct http_request *request, char **req
 	}
 	*request_str = buf;
 
-	size_t n = sprintf(buf, "GET %s HTTP/1.1\r\n", request->uri->abs_path);
+	size_t n = sprintf(buf, "%s %s HTTP/1.1\r\n", request->method, request->uri->abs_path);
 	n += sprintf(buf + n, "Host: %s\r\n", request->uri->host);
 	n += sprintf(buf + n, "Connection: close\r\n");
 	h = headers;
@@ -256,7 +265,7 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 	return HTTP_OK;
 }
 
-http_err https_get(struct http_ctx *ctx, const struct http_request *request, struct http_response *response)
+http_err https_send(struct http_ctx *ctx, const struct http_request *request, struct http_response *response)
 {
 	int sfd = connect_to_resource(request->uri);
 	SSL *ssl = SSL_new(ctx->ssl_ctx);
@@ -337,7 +346,6 @@ static void http_message_free(struct http_message *message)
 void http_request_free(struct http_request *request)
 {
 	http_uri_free(request->uri);
-	free(request->method);
 	if (request->headers) {
 		hashmap_free(request->headers, free);
 	}

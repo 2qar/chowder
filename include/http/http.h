@@ -49,6 +49,15 @@ enum http_status_code {
 	HTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED		= 505,
 };
 
+#define HTTP_METHOD_OPTIONS	"OPTIONS"
+#define HTTP_METHOD_GET		"GET"
+#define HTTP_METHOD_HEAD	"HEAD"
+#define HTTP_METHOD_POST	"POST"
+#define HTTP_METHOD_PUT		"PUT"
+#define HTTP_METHOD_DELETE	"DELETE"
+#define HTTP_METHOD_TRACE	"TRACE"
+#define HTTP_METHOD_CONNECT	"CONNECT"
+
 struct http_uri {
 	char *host;
 	uint16_t port;
@@ -104,9 +113,11 @@ struct http_ctx {
 	unsigned long err_errno;
 };
 
+void http_request_init(struct http_request *, struct http_uri *);
+
 http_uri_parse_err http_parse_uri(const char *uri, struct http_uri *);
 struct http_response http_get(const struct http_uri *, const struct http_message *);
-http_err https_get(struct http_ctx *, const struct http_request *, struct http_response *);
+http_err https_send(struct http_ctx *, const struct http_request *, struct http_response *);
 
 void http_uri_free(struct http_uri *);
 void http_request_free(struct http_request *);

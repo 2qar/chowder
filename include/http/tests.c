@@ -115,11 +115,10 @@ static void test_https_get()
 	struct http_ctx ctx = {0};
 	ctx.ssl_ctx = ssl_ctx;
 	struct http_request request = {0};
-	request.uri = &uri;
-	request.headers = hashmap_new(20);
+	http_request_init(&request, &uri);
 	hashmap_add(request.headers, "User-Agent", "chowder-http-lib/1.0");
 	struct http_response response = {0};
-	http_err err = https_get(&ctx, &request, &response);
+	http_err err = https_send(&ctx, &request, &response);
 	assert(err == HTTP_OK);
 	assert(response.status_code == HTTP_STATUS_OK);
 	SSL_CTX_free(ssl_ctx);
