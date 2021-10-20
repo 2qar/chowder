@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 
 const char *uri_err_str[] = {
 	"HTTP_URI_OK",
@@ -104,8 +103,7 @@ static void test_http_parse_uri()
 			print_uri(&uri);
 			putchar('\n');
 		}
-		free(uri.host);
-		free(uri.abs_path);
+		http_uri_free(&uri);
 	}
 }
 
@@ -126,15 +124,9 @@ static void test_https_get()
 	// TODO: make some status code constants
 	assert(response.status_code == 200);
 	SSL_CTX_free(ssl_ctx);
-	// TODO: make some free functions, cus this is ugly
-	free(response.message->body);
-	free(response.message);
-	free(response.reason);
-	hashmap_free(response.headers, free);
 	hashmap_remove(request.headers, "User-Agent");
-	hashmap_free(request.headers, free);
-	free(uri.host);
-	free(uri.abs_path);
+	http_request_free(&request);
+	http_response_free(&response);
 	return;
 }
 

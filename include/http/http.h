@@ -66,4 +66,8 @@ http_uri_parse_err http_parse_uri(const char *uri, struct http_uri *);
 struct http_response http_get(const struct http_uri *, const struct http_message *);
 http_err https_get(struct http_ctx *, const struct http_request *, struct http_response *);
 
+void http_uri_free(struct http_uri *);
+void http_request_free(struct http_request *);
+void http_response_free(struct http_response *);
+
 #endif // CHOWDER_HTTP_H

@@ -316,3 +316,40 @@ http_err https_get(struct http_ctx *ctx, const struct http_request *request, str
 
 	return parse_response_string(buf, response);
 }
+
+void http_uri_free(struct http_uri *uri)
+{
+	free(uri->host);
+	free(uri->abs_path);
+}
+
+static void http_message_free(struct http_message *message)
+{
+	if (message) {
+		// FIXME: this probably shouldn't be NULL; read the todo in parse_response_string()
+		if (message->headers) {
+			hashmap_free(message->headers, free);
+		}
+		free(message->body);
+	}
+	free(message);
+}
+
+void http_request_free(struct http_request *request)
+{
+	http_uri_free(request->uri);
+	free(request->method);
+	if (request->headers) {
+		hashmap_free(request->headers, free);
+	}
+	http_message_free(request->message);
+}
+
+void http_response_free(struct http_response *response)
+{
+	free(response->reason);
+	if (response->headers) {
+		hashmap_free(response->headers, free);
+	}
+	http_message_free(response->message);
+}
