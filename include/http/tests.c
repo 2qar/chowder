@@ -1,9 +1,11 @@
 #include "http.h"
 
 #include <assert.h>
+#include "hashmap.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 const char *uri_err_str[] = {
 	"HTTP_URI_OK",
@@ -102,6 +104,8 @@ static void test_http_parse_uri()
 			print_uri(&uri);
 			putchar('\n');
 		}
+		free(uri.host);
+		free(uri.abs_path);
 	}
 }
 
@@ -121,6 +125,16 @@ static void test_https_get()
 	assert(err == HTTP_OK);
 	// TODO: make some status code constants
 	assert(response.response_status_code == 200);
+	SSL_CTX_free(ssl_ctx);
+	// TODO: make some free functions, cus this is ugly
+	free(response.response_message->message_body);
+	free(response.response_message);
+	free(response.response_reason);
+	hashmap_free(response.response_headers, free);
+	hashmap_remove(request.request_headers, "User-Agent");
+	hashmap_free(request.request_headers, free);
+	free(uri.host);
+	free(uri.abs_path);
 	return;
 }
 

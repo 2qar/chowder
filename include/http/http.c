@@ -35,14 +35,6 @@ http_uri_parse_err http_parse_uri(const char *uri_str, struct http_uri *uri)
 	}
 	char *host_begin = scheme_end + 3;
 	char *host_end = strpbrk(host_begin, ":/");
-	if (!host_end) {
-		host = strdup(host_begin);
-	} else {
-		size_t host_len = host_end - host_begin + 1;
-		host = calloc(host_len, sizeof(char));
-		snprintf(host, host_len, "%s", host_begin);
-	}
-
 	size_t port_len = 0;
 	if (host_end && *host_end == ':') {
 		char *port_end = host_end + 1;
@@ -59,8 +51,15 @@ http_uri_parse_err http_parse_uri(const char *uri_str, struct http_uri *uri)
 		assert(sscanf(host_end + 1, "%hu", &port) == 1);
 	}
 	char *abs_path_begin = host_end;
-	if (port_len) {
+	if (abs_path_begin && port_len) {
 		abs_path_begin += 1 + port_len;
+	}
+	if (!host_end) {
+		host = strdup(host_begin);
+	} else {
+		size_t host_len = host_end - host_begin + 1;
+		host = calloc(host_len, sizeof(char));
+		snprintf(host, host_len, "%s", host_begin);
 	}
 	if (abs_path_begin && *abs_path_begin != '\0') {
 		abs_path = strdup(abs_path_begin);
@@ -229,6 +228,9 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 		char *key = strndup(header, value_start - 1 - header);
 		// FIXME: strip trailing whitespace from values
 		hashmap_add(headers, key, strndup(value_start, value_end - value_start));
+		// FIXME: hashmap_add() needs a flag or something so it doesn't
+		//        duplicate the key string all the time
+		free(key);
 		header = strstr(header, "\r\n") + 2;
 	}
 	size_t reason_len = reason_end - reason_start;
