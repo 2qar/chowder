@@ -121,8 +121,7 @@ static void test_https_get()
 	struct http_response response = {0};
 	http_err err = https_get(&ctx, &request, &response);
 	assert(err == HTTP_OK);
-	// TODO: make some status code constants
-	assert(response.status_code == 200);
+	assert(response.status_code == HTTP_STATUS_OK);
 	SSL_CTX_free(ssl_ctx);
 	hashmap_remove(request.headers, "User-Agent");
 	http_request_free(&request);
