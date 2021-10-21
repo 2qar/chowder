@@ -107,20 +107,42 @@ static void test_http_parse_uri()
 	}
 }
 
-static void test_https_get()
+static void test_https_send_simple()
 {
-	struct http_uri uri;
-	http_parse_uri("https://github.com/BigHeadGeorge/", &uri);
 	SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
 	struct http_ctx ctx = {0};
 	ctx.ssl_ctx = ssl_ctx;
+	struct http_uri uri;
 	struct http_request request = {0};
+	struct http_response response = {0};
+	http_parse_uri("https://bigheadgeorge.github.io", &uri);
 	http_request_init(&request, &uri);
 	hashmap_add(request.headers, "User-Agent", "chowder-http-lib/1.0");
-	struct http_response response = {0};
+
 	http_err err = https_send(&ctx, &request, &response);
-	assert(err == HTTP_OK);
-	assert(response.status_code == HTTP_STATUS_OK);
+	if (err != HTTP_OK) {
+		fprintf(stderr, "test_https_send_simple(): expected HTTP_OK, got %d\n", err);
+	} else if (response.status_code != HTTP_STATUS_OK) {
+		fprintf(stderr, "test_https_send_simple(): expected HTTP_STATUS_OK, got %d\n", response.status_code);
+	}
+	if (err == HTTP_OK && response.status_code == HTTP_STATUS_OK) {
+		FILE *website_file = fopen("test/my_site.html", "r");
+		fseek(website_file, 0L, SEEK_END);
+		size_t website_file_len = ftell(website_file);
+		fseek(website_file, 0L, SEEK_SET);
+		char *website_str = calloc(website_file_len + 1, sizeof(char));
+		size_t n = fread(website_str, 1, website_file_len, website_file);
+		fclose(website_file);
+		assert(n == website_file_len);
+		if (response.message->body_len != website_file_len) {
+			fprintf(stderr, "test_https_send_simple(): expected body length of %zu, got %zu\n",
+					website_file_len, response.message->body_len);
+		} else if (memcmp(website_str, response.message->body, website_file_len)) {
+			fprintf(stderr, "test_https_send_simple(): received message body differs from expected message body\n");
+		}
+		// TODO: check some headers, too
+	}
+
 	SSL_CTX_free(ssl_ctx);
 	hashmap_remove(request.headers, "User-Agent");
 	http_request_free(&request);
@@ -131,5 +153,5 @@ static void test_https_get()
 int main()
 {
 	test_http_parse_uri();
-	test_https_get();
+	test_https_send_simple();
 }
