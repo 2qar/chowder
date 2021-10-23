@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define USER_AGENT	"chowder-http-lib/1.0"
-
 const char *uri_err_str[] = {
 	"HTTP_URI_OK",
 	"HTTP_URI_BAD_SCHEME",
@@ -146,7 +144,6 @@ static void test_https_send_simple(SSL_CTX *ssl_ctx)
 	struct http_response response = {0};
 	http_parse_uri("https://bigheadgeorge.github.io", &uri);
 	http_request_init(&request, &uri);
-	hashmap_add(request.headers, "User-Agent", USER_AGENT);
 
 	http_err err = https_send(&ctx, &request, &response);
 	if (err != HTTP_OK) {
@@ -214,7 +211,6 @@ static void test_https_send_errors(SSL_CTX *ssl_ctx)
 	struct http_request request = {0};
 	struct http_response response = {0};
 	http_request_init(&request, &uri);
-	hashmap_add(request.headers, "User-Agent", USER_AGENT);
 
 	http_err err;
 	for (size_t i = 0; i < uri_strings_len; ++i) {

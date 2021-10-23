@@ -134,6 +134,18 @@ void *hashmap_get(struct hashmap *hm, char *key) {
 	}
 }
 
+void *hashmap_set(struct hashmap *hm, char *key, void *value) {
+	struct bucket_entry *b = hashmap_get_bucket_entry(hm, key);
+	if (b) {
+		void *old_value = b->value;
+		b->value = value;
+		return old_value;
+	} else {
+		hashmap_add(hm, key, value);
+		return NULL;
+	}
+}
+
 void *hashmap_remove(struct hashmap *hm, char *key) {
 	size_t i = hashmap_get_index(hm, key);
 	if (i != hm->entries_len) {

@@ -11,7 +11,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define CHUNK_SIZE 4096
+#define CHUNK_SIZE 		4096
+#define DEFAULT_USER_AGENT	"chowder-http-lib/1.0"
 
 void http_request_init(struct http_request *request, struct http_uri *uri)
 {
@@ -19,6 +20,7 @@ void http_request_init(struct http_request *request, struct http_uri *uri)
 	request->method = HTTP_METHOD_GET;
 	// FIXME: hashmap should dynamically grow
 	request->headers = hashmap_new(20);
+	hashmap_set(request->headers, "User-Agent", DEFAULT_USER_AGENT);
 	request->message = NULL;
 }
 
