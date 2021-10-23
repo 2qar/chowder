@@ -232,14 +232,23 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 	struct hashmap *headers = hashmap_new(headers_len);
 	header = response_str + reason_end + 2;
 	while (strncmp(header, "\r\n", 2)) {
-		char *value_start = index(header, ':') + 1;
-		char *value_end = index(value_start, '\r');
-		char *key = strndup(header, value_start - 1 - header);
-		// FIXME: strip trailing whitespace from values
-		hashmap_add(headers, key, strndup(value_start, value_end - value_start));
-		// FIXME: hashmap_add() needs a flag or something so it doesn't
-		//        duplicate the key string all the time
-		free(key);
+		char *header_name_end = index(header, ':') + 1;
+		char *header_end = index(header_name_end, '\r');
+		char *value_start = header_name_end;
+		while (value_start < header_end && *value_start == ' ') {
+			++value_start;
+		}
+		char *value_end = header_end;
+		while (value_end > header_name_end && *value_end == ' ') {
+			--value_end;
+		}
+		if (value_start < value_end) {
+			char *key = strndup(header, header_name_end - 1 - header);
+			hashmap_add(headers, key, strndup(value_start, value_end - value_start));
+			// FIXME: hashmap_add() needs a flag or something so it doesn't
+			//        duplicate the key string all the time
+			free(key);
+		}
 		header = strstr(header, "\r\n") + 2;
 	}
 	size_t reason_len = reason_end - reason_start;

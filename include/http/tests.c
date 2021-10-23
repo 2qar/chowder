@@ -109,6 +109,18 @@ static void test_http_parse_uri()
 
 static void test_https_send_simple()
 {
+	char *header_keys[] = {
+		"Server",
+		"Content-Length",
+	};
+	const char *header_values[] = {
+		"GitHub.com",
+		"166",
+	};
+	size_t header_keys_len = sizeof(header_keys) / sizeof(char *);
+	size_t header_values_len = sizeof(header_values) / sizeof(char *);
+	assert(header_keys_len == header_values_len);
+
 	SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
 	struct http_ctx ctx = {0};
 	ctx.ssl_ctx = ssl_ctx;
@@ -126,6 +138,17 @@ static void test_https_send_simple()
 		fprintf(stderr, "test_https_send_simple(): expected HTTP_STATUS_OK, got %d\n", response.status_code);
 	}
 	if (err == HTTP_OK && response.status_code == HTTP_STATUS_OK) {
+		char *header_value;
+		for (size_t i = 0; i < header_keys_len; ++i) {
+			header_value = hashmap_get(response.headers, header_keys[i]);
+			if (!header_value) {
+				fprintf(stderr, "test_https_send_simple(): expected a value for header \"%s\"\n", header_keys[i]);
+			} else if (strcmp(header_value, header_values[i])) {
+				fprintf(stderr, "test_https_send_simple(): expected the header \"%s\" to be \"%s\", got \"%s\"\n",
+						header_keys[i], header_values[i], header_value);
+			}
+		}
+
 		FILE *website_file = fopen("test/my_site.html", "r");
 		fseek(website_file, 0L, SEEK_END);
 		size_t website_file_len = ftell(website_file);
@@ -140,7 +163,6 @@ static void test_https_send_simple()
 		} else if (memcmp(website_str, response.message->body, website_file_len)) {
 			fprintf(stderr, "test_https_send_simple(): received message body differs from expected message body\n");
 		}
-		// TODO: check some headers, too
 	}
 
 	SSL_CTX_free(ssl_ctx);
