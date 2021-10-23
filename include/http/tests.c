@@ -6,11 +6,29 @@
 #include <stdio.h>
 #include <string.h>
 
+#define USER_AGENT	"chowder-http-lib/1.0"
+
 const char *uri_err_str[] = {
 	"HTTP_URI_OK",
 	"HTTP_URI_BAD_SCHEME",
 	"HTTP_URI_PORT_EXPECTED",
 	"HTTP_URI_PORT_TOO_BIG",
+};
+
+#define EIDX(name) [name * -1] = #name
+
+const char *http_err_str[] = {
+	EIDX(HTTP_OK),
+	EIDX(HTTP_NO_MEM),
+	EIDX(HTTP_HOST_NOT_FOUND),
+	EIDX(HTTP_HOST_NOT_SUPPORTED),
+	EIDX(HTTP_CONNECTION_REFUSED),
+	EIDX(HTTP_NO_NETWORK),
+	EIDX(HTTP_TIMED_OUT),
+	EIDX(HTTP_BAD_RESPONSE),
+	EIDX(HTTP_SSL_ERR),
+	EIDX(HTTP_SSL_GENERAL_ERR),
+	EIDX(HTTP_ABANDON_HOPE),
 };
 
 static bool str_equal(const char *s1, const char *s2)
@@ -107,7 +125,7 @@ static void test_http_parse_uri()
 	}
 }
 
-static void test_https_send_simple()
+static void test_https_send_simple(SSL_CTX *ssl_ctx)
 {
 	char *header_keys[] = {
 		"Server",
@@ -121,7 +139,6 @@ static void test_https_send_simple()
 	size_t header_values_len = sizeof(header_values) / sizeof(char *);
 	assert(header_keys_len == header_values_len);
 
-	SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
 	struct http_ctx ctx = {0};
 	ctx.ssl_ctx = ssl_ctx;
 	struct http_uri uri;
@@ -129,7 +146,7 @@ static void test_https_send_simple()
 	struct http_response response = {0};
 	http_parse_uri("https://bigheadgeorge.github.io", &uri);
 	http_request_init(&request, &uri);
-	hashmap_add(request.headers, "User-Agent", "chowder-http-lib/1.0");
+	hashmap_add(request.headers, "User-Agent", USER_AGENT);
 
 	http_err err = https_send(&ctx, &request, &response);
 	if (err != HTTP_OK) {
@@ -163,17 +180,64 @@ static void test_https_send_simple()
 		} else if (memcmp(website_str, response.message->body, website_file_len)) {
 			fprintf(stderr, "test_https_send_simple(): received message body differs from expected message body\n");
 		}
+		free(website_str);
 	}
 
-	SSL_CTX_free(ssl_ctx);
 	hashmap_remove(request.headers, "User-Agent");
 	http_request_free(&request);
 	http_response_free(&response);
 	return;
 }
 
+static const char *http_err_to_string(http_err err)
+{
+	return http_err_str[err * -1];
+}
+
+static void test_https_send_errors(SSL_CTX *ssl_ctx)
+{
+	char *uri_strings[] = {
+		"https://thiswebsiteisafakewebsiteforreal.com",
+		"https://ogdog.live",
+	};
+	http_err expected_errors[] = {
+		HTTP_HOST_NOT_FOUND,
+		HTTP_CONNECTION_REFUSED,
+	};
+	size_t uri_strings_len = sizeof(uri_strings) / sizeof(char *);
+	size_t expected_errors_len = sizeof(expected_errors) / sizeof(http_err);
+	assert(uri_strings_len == expected_errors_len);
+
+	struct http_ctx ctx = {0};
+	ctx.ssl_ctx = ssl_ctx;
+	struct http_uri uri;
+	struct http_request request = {0};
+	struct http_response response = {0};
+	http_request_init(&request, &uri);
+	hashmap_add(request.headers, "User-Agent", USER_AGENT);
+
+	http_err err;
+	for (size_t i = 0; i < uri_strings_len; ++i) {
+		http_parse_uri(uri_strings[i], &uri);
+		err = https_send(&ctx, &request, &response);
+		if (err != expected_errors[i]) {
+			fprintf(stderr, "test_https_send_errors(): expected %s, got %s\n",
+					http_err_to_string(expected_errors[i]), http_err_to_string(err));
+		}
+		http_uri_free(&uri);
+	}
+
+	hashmap_remove(request.headers, "User-Agent");
+	request.uri = NULL;
+	http_request_free(&request);
+	http_response_free(&response);
+}
+
 int main()
 {
 	test_http_parse_uri();
-	test_https_send_simple();
+	SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
+	test_https_send_simple(ssl_ctx);
+	test_https_send_errors(ssl_ctx);
+	SSL_CTX_free(ssl_ctx);
 }

@@ -277,6 +277,9 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 http_err https_send(struct http_ctx *ctx, const struct http_request *request, struct http_response *response)
 {
 	int sfd = connect_to_resource(request->uri);
+	if (sfd < 0) {
+		return sfd;
+	}
 	SSL *ssl = SSL_new(ctx->ssl_ctx);
 	if (ssl == NULL) {
 		ctx->err_errno = ERR_get_error();
@@ -336,8 +339,10 @@ http_err https_send(struct http_ctx *ctx, const struct http_request *request, st
 
 void http_uri_free(struct http_uri *uri)
 {
-	free(uri->host);
-	free(uri->abs_path);
+	if (uri) {
+		free(uri->host);
+		free(uri->abs_path);
+	}
 }
 
 static void http_message_free(struct http_message *message)
