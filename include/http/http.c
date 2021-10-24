@@ -192,7 +192,7 @@ static size_t digits(int n)
 }
 
 // FIXME: be more careful while parsing so malformed responses get caught
-http_err parse_response_string(char *response_str, struct http_response *response)
+static http_err parse_response_string(char *response_str, struct http_response *response)
 {
 	int version_major, version_minor, status_code;
 	int n = sscanf(response_str, "HTTP/%d.%d %d ", &version_major, &version_minor, &status_code);
@@ -202,8 +202,7 @@ http_err parse_response_string(char *response_str, struct http_response *respons
 	size_t reason_start = strlen("HTTP/.  ") + digits(version_major)
 		+ digits(version_minor) + digits(status_code);
 	size_t reason_end = reason_start;
-	while (response_str[reason_end] != '\0' && (isalpha(response_str[reason_end])
-				|| ispunct(response_str[reason_end]))) {
+	while (response_str[reason_end] != '\0' && response_str[reason_end] != '\r') {
 		++reason_end;
 	}
 	if (reason_end == reason_start || response_str[reason_end] == '\0') {
