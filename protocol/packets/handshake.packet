@@ -1,0 +1,9 @@
+id = 0x00
+
+VarInt protocol_version
+String(255) server_address
+UShort server_port
+Enum(VarInt) next_state {
+	STATUS = 1
+	LOGIN = 2
+}

@@ -155,6 +155,14 @@ bool packet_read_short(struct packet *p, uint16_t *s) {
 	return true;
 }
 
+bool packet_read_float(struct packet *p, float *f) {
+	return packet_read_int(p, (int32_t *) f);
+}
+
+bool packet_read_double(struct packet *p, double *d) {
+	return packet_read_long(p, (uint64_t *) d);
+}
+
 bool packet_read_long(struct packet *p, uint64_t *l) {
 	uint64_t hl = 0;
 	int i = 7;
@@ -176,6 +184,18 @@ bool packet_read_nbt(struct packet *p, struct nbt **nbt) {
 	size_t nbt_len = nbt_unpack(p->packet_len - p->index, p->data + p->index, nbt);
 	p->index += nbt_len;
 	return nbt_len != 0;
+}
+
+bool packet_read_slot(struct packet *p, struct slot *s) {
+	if (!packet_read_byte(p, (uint8_t *) &s->present)) {
+		return false;
+	} else if (s->present) {
+		return packet_read_varint(p, &s->item_id)
+			&& packet_read_byte(p, (uint8_t *) &s->item_count)
+			&& packet_read_nbt(p, &s->nbt);
+	} else {
+		return true;
+	}
 }
 
 /* TODO: test w/ negative values if i ever get around to sending chunks w/
@@ -353,4 +373,31 @@ int packet_write_nbt(struct packet *p, struct nbt *nbt) {
 	int n = packet_write_bytes(p, nbt_len, nbt_data);
 	free(nbt_data);
 	return n;
+}
+
+int packet_write_slot(struct packet *p, struct slot *s) {
+	int total = 0;
+	int n = packet_write_byte(p, s->present);
+	if (n < 0)
+		return n;
+	total += n;
+	if (s->present) {
+		n = packet_write_varint(p, s->item_id);
+		if (n < 0)
+			return n;
+		total += n;
+		n = packet_write_byte(p, s->item_count);
+		if (n < 0)
+			return n;
+		total += n;
+		if (s->nbt != NULL) {
+			n = packet_write_nbt(p, s->nbt);
+		} else {
+			n = packet_write_byte(p, TAG_End);
+		}
+		if (n < 0)
+			return n;
+		total += n;
+	}
+	return total;
 }

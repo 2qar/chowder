@@ -1,0 +1,9 @@
+id = 0x36
+
+Double x
+Double y
+Double z
+Float yaw
+Float pitch
+Byte flags
+VarInt teleport_id

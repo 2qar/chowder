@@ -1,0 +1,3 @@
+id = 0x00
+
+VarInt teleport_id

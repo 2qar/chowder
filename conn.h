@@ -16,7 +16,8 @@ struct conn {
 	EVP_CIPHER_CTX *_encrypt_ctx;
 	struct player *player;
 
-	uint64_t keep_alive_id;
+	int32_t teleport_id;
+	int64_t keep_alive_id;
 	time_t last_ping;
 	time_t last_pong;
 };

@@ -1,0 +1,8 @@
+id = 0x13
+
+Double x
+Double y_feet
+Double z
+Float yaw
+Float pitch
+Bool on_ground

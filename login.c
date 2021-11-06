@@ -13,23 +13,44 @@
 
 #include "json.h"
 #include "login.h"
+#include "protocol_autogen.h"
 #include "protocol.h"
 
 #define WRITE_CALLBACK_CHUNK_SIZE 4096
 
-int handle_server_list_ping(struct conn *c) {
+int handle_server_list_ping(struct conn *conn) {
 	/* handle the empty request packet */
-	if (conn_packet_read_header(c) < 0) {
+	int packet_err = packet_read_header(conn->packet, conn->sfd);
+	if (packet_err < 0) {
+		fprintf(stderr, "handle_server_list_ping: failed to read packet header: %d\n", packet_err);
 		return -1;
 	}
 
-	if (server_list_ping(c) < 0)
+	struct server_list_ping status_pack;
+	/* TODO: don't hardcode, insert state instead (once state exists) */
+	status_pack.status_json = "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
+		"\"players\": { \"max\": 4, \"online\": 0, \"sample\": [] },"
+		"\"description\": { \"text\": \"description\" } }";
+	struct protocol_do_err err = protocol_do_write((protocol_do_func) protocol_write_server_list_ping, conn, &status_pack);
+	// FIXME: this error handling sucks, but it could be worse
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr, "handle_server_list_ping: server_list_ping failed\n");
 		return -1;
+	}
 
-	uint8_t l[8] = {0};
-	if (ping(c, l) < 0)
+	struct ping ping;
+	err = protocol_do_read((protocol_do_func) protocol_read_ping, conn, &ping);
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr, "handle_server_list_ping: ping failed\n");
 		return -1;
-	return pong(c, l);
+	}
+	struct pong pong = { .payload = ping.payload };
+	err = protocol_do_write((protocol_do_func) protocol_write_pong, conn, &pong);
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr, "handle_server_list_ping: pong failed\n");
+		return -1;
+	}
+	return 0;
 }
 
 char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16]) {
@@ -208,17 +229,79 @@ void uuid_bytes(char uuid[33], uint8_t bytes[16]) {
 	BN_free(bn);
 }
 
+/* frees the encrypted buffer pointed at by *buf, replacing it with the decrypted
+ * buffer, and puts the new length in *buf_len */
+static int decrypt_bytes(EVP_PKEY_CTX *decrypt_ctx, size_t *buf_len, uint8_t **buf) {
+	size_t new_buf_len;
+	int err = EVP_PKEY_decrypt(decrypt_ctx, NULL, &new_buf_len, *buf, *buf_len);
+	if (err != 1) {
+		return err;
+	}
+	uint8_t *new_buf = malloc(new_buf_len);
+	err = EVP_PKEY_decrypt(decrypt_ctx, new_buf, &new_buf_len, *buf, *buf_len);
+	if (err != 1) {
+		free(new_buf);
+		return err;
+	} else {
+		free(*buf);
+		*buf = new_buf;
+		*buf_len = new_buf_len;
+		return 1;
+	}
+}
+
 int login(struct conn *c, struct login_ctx *l_ctx) {
+	(void) l_ctx;
 	c->player = calloc(1, sizeof(struct player));
-	if (login_start(c, c->player->username) < 0)
+	struct login_start login_start_pack;
+	struct protocol_do_err err = protocol_do_read((protocol_do_func) protocol_read_login_start, c, &login_start_pack);
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr, "login: failed to read login_start packet\n");
 		return -1;
-	uint8_t verify[4];
-	if (encryption_request(c, l_ctx->pubkey_len, l_ctx->pubkey, verify) < 0)
+	}
+	size_t username_len = strlen(login_start_pack.username);
+	memcpy(c->player->username, login_start_pack.username, username_len);
+	c->player->username[username_len] = '\0';
+	uint8_t verify_token[4];
+	for (int i = 0; i < 4; ++i) {
+		verify_token[i] = rand();
+	}
+	struct encryption_request encryption_request_pack = {
+		.server_id = "                    ",
+		.pubkey_len = l_ctx->pubkey_len,
+		.pubkey = l_ctx->pubkey,
+		.verify_token_len = 4,
+		.verify_token = verify_token,
+	};
+	err = protocol_do_write((protocol_do_func) protocol_write_encryption_request, c, &encryption_request_pack);
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr, "login: failed to send encryption request\n");
 		return -1;
-	uint8_t secret[16];
-	if (encryption_response(c, l_ctx->decrypt_ctx, verify, secret) < 0)
+	}
+	struct encryption_response encryption_response_pack;
+	err = protocol_do_read((protocol_do_func) protocol_read_encryption_response, c, &encryption_response_pack);
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr, "login: failed to read encryption response\n");
 		return -1;
-	char *hash = mc_hash(l_ctx->pubkey_len, l_ctx->pubkey, secret);
+	}
+	if (decrypt_bytes(l_ctx->decrypt_ctx,
+				(size_t *) &encryption_response_pack.shared_secret_len,
+				&encryption_response_pack.shared_secret) <= 0) {
+		fprintf(stderr, "login: failed to decrypt shared secret\n");
+		return -1;
+	} else if (decrypt_bytes(l_ctx->decrypt_ctx,
+				(size_t *) &encryption_response_pack.verify_token_len,
+				&encryption_response_pack.verify_token) <= 0) {
+		fprintf(stderr, "login: failed to decrypt verify token\n");
+		return -1;
+	} else if (encryption_response_pack.verify_token_len != 4 ||
+			memcmp(verify_token, encryption_response_pack.verify_token, 4)) {
+		// FIXME: this shouldn't return the same """error""" as serious
+		//        errors like decryption failing
+		fprintf(stderr, "login: verify_token mismatch\n");
+		return -1;
+	}
+	char *hash = mc_hash(l_ctx->pubkey_len, l_ctx->pubkey, encryption_response_pack.shared_secret);
 	if (!hash) {
 		fputs("error generating SHA1 hash", stderr);
 		return -1;
@@ -230,7 +313,7 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 
 	/* FIXME: rename conn_init() -> conn_crypto_init(), and only use it to
 	 *        initialize the encrypt / decrypt contexts */
-	if (conn_init(c, c->sfd, secret) < 0) {
+	if (conn_init(c, c->sfd, encryption_response_pack.shared_secret) < 0) {
 		fprintf(stderr, "error initializing encryption\n");
 		return -1;
 	}
@@ -238,5 +321,14 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 	char formatted_uuid[37] = {0};
 	format_uuid(uuid, formatted_uuid);
 	uuid_bytes(uuid, c->player->uuid);
-	return login_success(c, formatted_uuid, c->player->username);
+	struct login_success login_success_pack = {
+		.uuid = formatted_uuid,
+		.username = c->player->username,
+	};
+	err = protocol_do_write((protocol_do_func) protocol_write_login_success, c, &login_success_pack);
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr, "login: error sending login success\n");
+		return -1;
+	}
+	return 0;
 }

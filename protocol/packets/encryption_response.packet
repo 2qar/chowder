@@ -1,0 +1,6 @@
+id = 0x01
+
+VarInt shared_secret_len
+ByteArray shared_secret
+VarInt verify_token_len
+ByteArray verify_token

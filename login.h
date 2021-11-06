@@ -6,11 +6,12 @@
 #include <openssl/evp.h>
 
 #include "conn.h"
+#include "packet.h"
 
 struct login_ctx {
 	EVP_PKEY_CTX *decrypt_ctx;
 	size_t pubkey_len;
-	const uint8_t *pubkey;
+	uint8_t *pubkey;
 };
 
 int handle_server_list_ping(struct conn *);

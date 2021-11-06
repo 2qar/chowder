@@ -1,0 +1,7 @@
+id = 0x01
+
+String(20) server_id
+VarInt pubkey_len
+ByteArray pubkey
+VarInt verify_token_len
+ByteArray verify_token

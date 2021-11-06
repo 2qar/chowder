@@ -1,0 +1,19 @@
+id = 0x2c
+
+Enum(VarInt) hand {
+	MAIN
+	OFF
+}
+Position location
+Enum(VarInt) face {
+	BOTTOM
+	TOP
+	NORTH
+	SOUTH
+	WEST
+	EAST
+}
+Float cursor_pos_x
+Float cursor_pos_y
+Float cursor_pos_z
+Bool inside_block
