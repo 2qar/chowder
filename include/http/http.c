@@ -321,6 +321,11 @@ http_err https_send(struct http_ctx *ctx, const struct http_request *request, st
 			buf = reallocarray(buf, buf_len, sizeof(char));
 		}
 	}
+	// FIXME: some sites cause SSL_ERROR_SYSCALL w/ errno value of 0; read BUGS
+	//        on SSL_get_error(3ssl). This happened when testing getting
+	//        the Discord homepage as an example, but this http stuff is
+	//        just gonna be used to make requests to the Mojang API so I
+	//        kinda don't care xd
 	int ssl_err = SSL_get_error(ssl, n);
 	if (ssl_err != SSL_ERROR_NONE && ssl_err != SSL_ERROR_ZERO_RETURN) {
 		ctx->ssl_errno = ssl_err;
