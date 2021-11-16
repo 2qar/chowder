@@ -1,10 +1,11 @@
 CC=cc
+CPPFLAGS=-Iinclude/json/include/ -Iinclude/
 CFLAGS=-Wall -Wextra -Werror -pedantic
 LIBSSL=`pkg-config --libs openssl`
 LIBS=$(LIBSSL) -lm -lz
 TARGET=chowder
 
-$(TARGET): main.o protocol.o login.o conn.o packet.o player.o nbt.o region.o rsa.o section.o server.o blocks.o world.o include/linked_list.o include/hashmap.o
+$(TARGET): main.o protocol.o login.o conn.o packet.o player.o nbt.o region.o rsa.o section.o server.o blocks.o world.o include/linked_list.o include/hashmap.o include/json/json.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 debug: CFLAGS += -g

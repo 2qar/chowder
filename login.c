@@ -13,8 +13,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#define JSMN_HEADER
-#include "include/jsmn/jsmn.h"
+#include "json.h"
 #include "login.h"
 #include "protocol.h"
 
@@ -189,6 +188,11 @@ char *read_body(char *resp) {
 	return NULL;
 }
 
+static bool property_equal(void *property, void *search_name) {
+	struct json_value *name = json_get(property, "name");
+	return name->type == JSON_STRING && !strcmp(name->string, search_name);
+}
+
 int player_id(const char *hash, char uuid[36], struct player *player) {
 	char *response = NULL;
 	int response_len = ping_sessionserver(player->username, hash, &response);
@@ -200,32 +204,35 @@ int player_id(const char *hash, char uuid[36], struct player *player) {
 	char *body = read_body(response);
 	if (body == NULL)
 		return -1;
-	size_t body_len = strlen(body);
-
-	// parse player id
-	jsmn_parser p;
-	jsmntok_t t[128];
-	jsmn_init(&p);
-	int tokens = jsmn_parse(&p, body, body_len, t, 128);
-	if (tokens < 0) {
-		fprintf(stderr, "jsmn_parse() failed: %d\n", tokens);
-		return -1;
-	} else if (tokens < 1 || t[0].type != JSMN_OBJECT) {
-		fprintf(stderr, "no JSON object\n");
+	struct json_value *root;
+	struct json_err_ctx json_err = json_parse(body, &root);
+	if (json_err.type != JSON_OK) {
+		fprintf(stderr, "error parsing sessionserver json response\n");
 		return -1;
 	}
-
-	for (int i = 1; i < tokens; ++i) {
-		if (t[i].type == JSMN_STRING) {
-			if (!strncmp(body + t[i].start, "id", 2)) {
-				memcpy(uuid, body + t[i+1].start, 32);
-			} else if (!strncmp(body + t[i].start, "value", 5)) {
-				size_t textures_len = t[i+1].end - t[i+1].start;
-				player->textures = calloc(textures_len + 1, sizeof(char));
-				memcpy(player->textures, body + t[i+1].start, textures_len);
+	struct json_value *id = json_get(root, "id");
+	if (id == NULL) {
+		fprintf(stderr, "no id :(\n");
+	} else {
+		memcpy(uuid, id->string, 32);
+	}
+	struct json_value *properties = json_get(root, "properties");
+	if (properties == NULL) {
+		fprintf(stderr, "no properties :(\n");
+	} else {
+		struct node *texture_node = list_find(properties->array, property_equal, "textures");
+		if (texture_node == NULL || list_item(texture_node) == NULL || list_empty(texture_node)) {
+			fprintf(stderr, "no textures :(\n");
+		} else {
+			struct json_value *texture_value = json_get(list_item(texture_node), "value");
+			if (texture_value == NULL) {
+				fprintf(stderr, "no texture value fuck this\n");
+			} else {
+				player->textures = strdup(texture_value->string);
 			}
 		}
 	}
+	json_free(root);
 	free(response);
 	if (uuid[0] == 0) {
 		fprintf(stderr, "no \"id\" field present in sessionserver response\n");

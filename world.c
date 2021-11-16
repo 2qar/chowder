@@ -106,5 +106,5 @@ void world_free(struct world *w) {
 		}
 		regions_list = list_next(regions_list);
 	}
-	hashmap_free(w->block_table, free);
+	hashmap_free(w->block_table, true, free);
 }

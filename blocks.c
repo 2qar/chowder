@@ -7,236 +7,156 @@
 
 #include "blocks.h"
 
-#include "include/jsmn/jsmn.h"
-#include "include/hashmap.h"
-
-/* FIXME: this just happens to work and is also a little too many */
-#define TOKENS 800000
+#include "hashmap.h"
+#include "linked_list.h"
+#include "json.h"
 
 #ifdef BLOCK_NAMES
 size_t block_names_len;
 char **block_names;
 
 void free_block_names() {
-	for (size_t i = 0; i < block_names_len; ++i)
-		free(block_names[i]);
 	free(block_names);
 }
 #endif
 
-char *read_blocks_json(char *blocks_json_path) {
-	FILE *f = fopen(blocks_json_path, "r");
-	if (f == NULL) {
-		char err[256];
-		snprintf(err, 256, "error opening '%s'", blocks_json_path);
-		perror(err);
-		return NULL;
+static void update_block_table_size(char *key, void *value, void *data)
+{
+	(void) key;
+	int64_t *size = (int64_t *) data;
+	struct json_value *states = json_get(value, "states");
+	assert(states != NULL && states->type == JSON_ARRAY);
+	struct node *state_list = states->array;
+	while (!list_empty(state_list)) {
+		struct json_value *state = list_item(state_list);
+		if (json_get(state, "properties") != NULL) {
+			++(*size);
+		}
+		if (json_get(state, "default") != NULL) {
+			++(*size);
+		}
+		state_list = list_next(state_list);
 	}
-	fseek(f, 0L, SEEK_END);
-	size_t blocks_json_len = ftell(f);
-	rewind(f);
-	char *blocks_json = malloc(sizeof(char) * (blocks_json_len + 1));
-	size_t n = fread(blocks_json, sizeof(char), blocks_json_len, f);
-	fclose(f);
-	if (n < blocks_json_len) {
-		perror("error reading blocks file");
-		fprintf(stderr, "read %ld, expected %ld\n", n, blocks_json_len);
-		free(blocks_json);
-		return NULL;
-	}
-	blocks_json[blocks_json_len] = '\0';
-	return blocks_json;
 }
 
-int toklen(jsmntok_t *t) {
-	return t->end - t->start;
-}
-
-int jstrncmp(char *s, char *blocks_json, jsmntok_t *t) {
-	return strncmp(s, blocks_json + t->start, toklen(t));
-}
-
-struct json {
-	char *src;
-	int tokens_len;
-	jsmntok_t *tokens;
+struct block_property {
+	char *name;
+	char *value;
 };
 
-/* assumes that the block IDs in blocks.json are sorted */
-int max_block_id(struct json *j) {
-	int i = j->tokens_len - 1;
-	int max_id_index = -1;
-	while (i > 0 && max_id_index < 0) {
-		if (j->tokens[i].type == JSMN_STRING && 
-				jstrncmp("id", j->src, &(j->tokens[i])) == 0) {
-			max_id_index = i + 1;
-		}
-		--i;
-	}
-
-	int max_id = -1;
-	if (max_id_index != -1) {
-		char id_str[16] = {0};
-		snprintf(id_str, 16, "%.*s", toklen(&(j->tokens[max_id_index])), j->src + j->tokens[max_id_index].start);
-		max_id = atoi(id_str);
-	}
-	return max_id;
+int block_property_compare(const void *p1, const void *p2)
+{
+	const struct block_property *b1 = p1;
+	const struct block_property *b2 = p2;
+	return strcmp(b1->name, b2->name);
 }
 
-int jseek(struct json *j, char *s, int from) {
-	int index = -1;
-
-	for (int i = from; i < j->tokens_len && index == -1; ++i) {
-		if (j->tokens[i].type == JSMN_STRING &&
-				jstrncmp(s, j->src, &(j->tokens[i])) == 0) {
-			index = i;
-		}
+static void add_block_state_to_table(char name_with_properties[256], struct json_value *id_json,
+		struct hashmap *block_table, bool add_name)
+{
+#ifndef BLOCK_NAMES
+	(void) add_name;
+#endif
+	int64_t *id = malloc(sizeof(int64_t));
+	*id = id_json->integer;
+	char *name = strdup(name_with_properties);
+	hashmap_add(block_table, name, id);
+#ifdef BLOCK_NAMES
+	if (add_name) {
+		block_names[*id] = name;
 	}
-
-	return index;
+#endif
 }
 
-int add_block_id(struct hashmap *hm, char *name, int id) {
-	/* TODO: malloc() a bunch of u16's instead of i32's
-	 *       to save memory XD */
-	void *data = malloc(sizeof(int));
-	memcpy(data, (void *) &id, sizeof(int));
-
-	#ifdef BLOCK_NAMES
-	if (block_names[id] == NULL)
-		block_names[id] = strdup(name);
-	#endif
-
-	hashmap_add(hm, name, data);
-	return 1;
+static void add_property(char *name, void *value, void *data)
+{
+	struct json_value *value_json = value;
+	struct block_property **property_list = data;
+	(**property_list).name = name;
+	(**property_list).value = value_json->string;
+	++(*property_list);
 }
 
-int parse_block_states(struct hashmap *hm, struct json *j, char *block_name, int state_index, int *count) {
-	char prop_name[256] = {0};
-	snprintf(prop_name, 256, "%s", block_name);
-	int state_end = j->tokens[state_index].end;
-	int i = state_index;
-
-	bool is_default = false;
-	int default_index = jseek(j, "default", state_index);
-	if (default_index != -1 && j->tokens[default_index].start < state_end) {
-		/* assumes that the value for "default" is true */
-		is_default = true;
+static void append_property_to_name(char name_with_properties[256], char *property_name, char *property_value)
+{
+	size_t off = strlen(name_with_properties);
+	size_t property_str_len = strlen(property_name) + strlen(property_value) + strlen(";=");
+	size_t n = snprintf(name_with_properties + off, 256 - off, ";%s=%s", property_name, property_value);
+	if (n != property_str_len) {
+		fprintf(stderr, "truncated block state \"%s\"\n", name_with_properties);
 	}
-
-	int properties_index = jseek(j, "properties", state_index);
-	if (properties_index != -1 && j->tokens[properties_index].start < state_end) {
-		i = properties_index;
-
-		++i;
-		int prop_end = j->tokens[i].end;
-		assert(j->tokens[i].type == JSMN_OBJECT);
-		++i;
-		while (j->tokens[i].start < prop_end) {
-			/* add property name */
-			strcat(prop_name, ";");
-			strncat(prop_name, j->src + j->tokens[i].start, toklen(&(j->tokens[i])));
-			++i;
-			/* add property value */
-			strcat(prop_name, "=");
-			strncat(prop_name, j->src + j->tokens[i].start, toklen(&(j->tokens[i])));
-			++i;
-		}
-	}
-
-	int id_index = jseek(j, "id", state_index);
-	if (id_index != -1 && j->tokens[id_index].start < state_end) {
-		i = id_index + 1;
-		assert(j->tokens[i].type == JSMN_PRIMITIVE);
-
-		char id_str[16];
-		snprintf(id_str, 16, "%.*s", toklen(&(j->tokens[i])), j->src + j->tokens[i].start);
-		int id = atoi(id_str);
-
-		*count += add_block_id(hm, prop_name, id);
-		if (is_default && strncmp(block_name, prop_name, strlen(block_name)) == 0)
-			add_block_id(hm, block_name, id);
-	}
-
-	i = state_index;
-	while (i < j->tokens_len && j->tokens[i].start < state_end)
-		++i;
-
-	return i;
 }
 
-/* parse each of the block IDs into a hashtable */
-int parse_blocks_json(struct hashmap *hm, struct json *j) {
-	int count = 0;
-	int i = 1;
-	int name_len = 128;
-	char name[128] = {0};
-	while (i < j->tokens_len && j->tokens[i].type == JSMN_STRING) {
-		snprintf(name, name_len, "%.*s", toklen(&(j->tokens[i])), j->src + j->tokens[i].start);
-		++i;
-
-		assert(j->tokens[i].type == JSMN_OBJECT);
-		int block_token_end = j->tokens[i].end;
-
-		int states_index = jseek(j, "states", i);
-		if (states_index != -1) {
-			i = states_index + 1;
-			assert(j->tokens[i].type == JSMN_ARRAY);
-			int states_index = i;
-			int states_end = j->tokens[states_index].end;
-			++i;
-			assert(j->tokens[i].type == JSMN_OBJECT);
-			while (i < j->tokens_len && j->tokens[i].start < states_end)
-				i = parse_block_states(hm, j, name, i, &count);
-		}
-
-		while (i < j->tokens_len && j->tokens[i].start < block_token_end)
-			++i;
+static void append_properties_to_name(char name_with_properties[256], struct json_value *properties)
+{
+	size_t properties_list_len = json_members(properties);
+	struct block_property *properties_list = calloc(properties_list_len, sizeof(struct block_property));
+	struct block_property *head = properties_list;
+	json_apply(properties, add_property, &head);
+	qsort(properties_list, properties_list_len, sizeof(struct block_property), block_property_compare);
+	for (size_t i = 0; i < properties_list_len; ++i) {
+		append_property_to_name(name_with_properties, properties_list[i].name, properties_list[i].value);
 	}
-	return count;
+	free(properties_list);
 }
 
-struct hashmap *create_block_table_from_json(char *blocks_json) {
-	jsmn_parser p;
-	jsmn_init(&p);
-	jsmntok_t *t = malloc(sizeof(jsmntok_t) * TOKENS);
-	int tokens = jsmn_parse(&p, blocks_json, strlen(blocks_json), t, TOKENS);
-	if (tokens < 0) {
-		fprintf(stderr, "error parsing blocks.json: %d\n", tokens);
-		free(t);
+static void add_block_state(char name_with_properties[256], struct json_value *state_json,
+		struct hashmap *block_table)
+{
+	struct json_value *id_json = json_get(state_json, "id");
+	bool added_name = false;
+	assert(id_json != NULL);
+	if (json_get(state_json, "default") != NULL) {
+		add_block_state_to_table(name_with_properties, id_json, block_table, !added_name);
+		added_name = true;
+	}
+	struct json_value *properties = json_get(state_json, "properties");
+	if (properties != NULL) {
+		append_properties_to_name(name_with_properties, properties);
+		add_block_state_to_table(name_with_properties, id_json, block_table, !added_name);
+	}
+}
+
+static void add_block_states(char *name, void *value, void *data)
+{
+	struct hashmap *block_table = data;
+	char name_with_properties[256] = {0};
+	struct json_value *states_json = json_get(value, "states");
+	assert(states_json != NULL && states_json->type == JSON_ARRAY);
+	struct node *states = states_json->array;
+	while (!list_empty(states)) {
+		snprintf(name_with_properties, 256, "%s", name);
+		add_block_state(name_with_properties, list_item(states), block_table);
+		states = list_next(states);
+	}
+}
+
+struct hashmap *create_block_table(char *block_json_path)
+{
+	FILE *json_file = fopen(block_json_path, "r");
+	if (json_file == NULL) {
+		perror("fopen");
 		return NULL;
 	}
-	t = realloc(t, sizeof(jsmntok_t) * tokens);
-
-	struct json j = {0};
-	j.src = blocks_json;
-	j.tokens_len = tokens;
-	j.tokens = t;
-	int block_ids = max_block_id(&j) + 1;
-	#ifdef BLOCK_NAMES
-	block_names_len = block_ids;
-	block_names = calloc(block_ids, sizeof(char *));
-	#endif
-	struct hashmap *hm = hashmap_new(block_ids);
-	int parsed = parse_blocks_json(hm, &j);
-	if (parsed != block_ids) {
-		fprintf(stderr, "too few blocks parsed; parsed (%d) != block_ids (%d)\n", parsed, block_ids);
+	struct json_value *root;
+	char *json_str;
+	struct json_err_ctx json_err = json_parse_file(json_file, &root, &json_str);
+	fclose(json_file);
+	if (json_err.type != JSON_OK) {
+		fprintf(stderr, "parsing blocks.json failed, err=%d\n", json_err.type);
 		return NULL;
 	}
 
-	free(t);
-	return hm;
-}
+	int64_t block_table_size = 0;
+	json_apply(root, update_block_table_size, &block_table_size);
+#ifdef BLOCK_NAMES
+	block_names_len = block_table_size;
+	block_names = calloc(block_names_len, sizeof(char *));
+#endif
 
-struct hashmap *create_block_table(char *block_json_path) {
-	char *blocks_json = read_blocks_json(block_json_path);
-	if (blocks_json == NULL)
-		return NULL;
-
-	struct hashmap *hm = create_block_table_from_json(blocks_json);
-	free(blocks_json);
-	if (hm == NULL)
-		return NULL;
-
-	return hm;
+	struct hashmap *block_table = hashmap_new(block_table_size);
+	json_apply(root, add_block_states, (void *) block_table);
+	json_free(root);
+	free(json_str);
+	return block_table;
 }

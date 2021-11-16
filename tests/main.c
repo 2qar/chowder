@@ -1,11 +1,12 @@
-#include <search.h>
-
+#include <assert.h>
+#include "blocks.h"
 #include "read_region.h"
-#include "parse_blocks.h"
 #include "write_blockstate.h"
 
 int main() {
-	test_parse_blocks();
-	test_read_region();
+	struct hashmap *hm = create_block_table("../gamedata/blocks.json");
+	assert(hm != NULL);
+	test_read_region(hm);
+	hashmap_free(hm, true, free);
 	test_write_blockstate_at();
 }

@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	hashmap_free(block_table, free);
+	hashmap_free(block_table, true, free);
 	free(p);
 	free_chunk(c);
 	free_block_names();

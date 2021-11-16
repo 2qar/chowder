@@ -1,10 +1,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <inttypes.h>
+#include <stdint.h>
 
 #include "read_region.h"
-#include "../region.h"
+#include "region.h"
 
 int verify_blockstates(struct section *s) {
 	int err = 0;
@@ -37,7 +37,7 @@ int verify_chunk(struct chunk *c) {
 	return err;
 }
 
-void test_read_region() {
+void test_read_region(struct hashmap *block_table) {
 	FILE *f = fopen("r.0.0.mca", "r");
 
 	struct region *region = malloc(sizeof(struct region));
@@ -50,7 +50,7 @@ void test_read_region() {
 				fprintf(stderr, "error reading chunk @ (%d, %d)\n", x, z);
 				exit(EXIT_FAILURE);
 			} else if (n > 0) {
-				struct chunk *c = parse_chunk(chunk_data);
+				struct chunk *c = parse_chunk(block_table, chunk_len, chunk_data);
 				if (verify_chunk(c) > 0)
 					exit(EXIT_FAILURE);
 				region->chunks[z][x] = c;
