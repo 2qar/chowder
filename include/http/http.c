@@ -18,9 +18,8 @@ void http_request_init(struct http_request *request, struct http_uri *uri)
 {
 	request->uri = uri;
 	request->method = HTTP_METHOD_GET;
-	// FIXME: hashmap should dynamically grow
-	request->headers = hashmap_new(20);
 	hashmap_set(request->headers, "User-Agent", DEFAULT_USER_AGENT);
+	request->headers = hashmap_new(1);
 	request->message = NULL;
 }
 
@@ -138,6 +137,23 @@ static int connect_to_resource(const struct http_uri *uri)
 	return sfd;
 }
 
+static void update_request_string_len(char *key, void *value, void *data)
+{
+	size_t *request_str_len = data;
+	*request_str_len += strlen(key) + strlen(value) + strlen(": \r\n");
+}
+
+struct add_header_ctx {
+	size_t n;
+	char *buf;
+};
+
+static void add_header_to_string(char *key, void *value, void *data)
+{
+	struct add_header_ctx *ctx = data;
+	ctx->n += sprintf(ctx->buf + ctx->n, "%s: %s\r\n", key, (char *) value);
+}
+
 static size_t make_request_string(const struct http_request *request, char **request_str)
 {
 	size_t request_str_len = strlen(request->method) + 2 + strlen("HTTP/1.1\r\n");
@@ -145,13 +161,7 @@ static size_t make_request_string(const struct http_request *request, char **req
 	request_str_len += strlen("Host: \r\n") + strlen(request->uri->host);
 	// FIXME: support persistent connections, maybe
 	request_str_len += strlen("Connection: close\r\n");
-	struct node *headers = hashmap_entries(request->headers);
-	struct node *h = headers;
-	while (!list_empty(h)) {
-		struct bucket_entry *b = list_item(h);
-		request_str_len += strlen(b->key) + strlen(": ") + strlen(b->value) + strlen("\r\n");
-		h = list_next(h);
-	}
+	hashmap_apply(request->headers, update_request_string_len, &request_str_len);
 	request_str_len += strlen("\r\n");
 	if (request->message) {
 		 request_str_len += request->message->body_len;
@@ -166,13 +176,9 @@ static size_t make_request_string(const struct http_request *request, char **req
 	size_t n = sprintf(buf, "%s %s HTTP/1.1\r\n", request->method, request->uri->abs_path);
 	n += sprintf(buf + n, "Host: %s\r\n", request->uri->host);
 	n += sprintf(buf + n, "Connection: close\r\n");
-	h = headers;
-	while (!list_empty(h)) {
-		struct bucket_entry *b = list_item(h);
-		n += sprintf(buf + n, "%s: %s\r\n", b->key, (char *) b->value);
-		h = list_next(h);
-	}
-	list_free_nodes(headers);
+	struct add_header_ctx ctx = { n, buf };
+	hashmap_apply(request->headers, add_header_to_string, &ctx);
+	n = ctx.n;
 	n += sprintf(buf + n, "\r\n");
 	if (request->message && request->message->body_len > 0) {
 		memcpy(buf + n, request->message->body, request->message->body_len);
@@ -246,9 +252,6 @@ static http_err parse_response_string(char *response_str, struct http_response *
 		if (value_start < value_end) {
 			char *key = strndup(header, header_name_end - 1 - header);
 			hashmap_add(headers, key, strndup(value_start, value_end - value_start));
-			// FIXME: hashmap_add() needs a flag or something so it doesn't
-			//        duplicate the key string all the time
-			free(key);
 		}
 		header = strstr(header, "\r\n") + 2;
 	}
@@ -356,7 +359,7 @@ static void http_message_free(struct http_message *message)
 	if (message) {
 		// FIXME: this probably shouldn't be NULL; read the todo in parse_response_string()
 		if (message->headers) {
-			hashmap_free(message->headers, free);
+			hashmap_free(message->headers, true, free);
 		}
 		free(message->body);
 	}
@@ -367,7 +370,7 @@ void http_request_free(struct http_request *request)
 {
 	http_uri_free(request->uri);
 	if (request->headers) {
-		hashmap_free(request->headers, free);
+		hashmap_free(request->headers, true, free);
 	}
 	http_message_free(request->message);
 }
@@ -376,7 +379,7 @@ void http_response_free(struct http_response *response)
 {
 	free(response->reason);
 	if (response->headers) {
-		hashmap_free(response->headers, free);
+		hashmap_free(response->headers, true, free);
 	}
 	http_message_free(response->message);
 }

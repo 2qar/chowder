@@ -21,7 +21,6 @@ void hashmap_free(struct hashmap *, bool free_keys, free_item_func);
  * the hashmap takes ownership of the key, so strings that need to live beyond
  * the hashmap should be strdup()'d
  * */
->>>>>>> set User-Agent by default
 void hashmap_add(struct hashmap *, char *key, void *value);
 /* Returns the old value associated with key, or NULL if there wasn't one. */
 void *hashmap_set(struct hashmap *, char *key, void *value);
