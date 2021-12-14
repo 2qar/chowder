@@ -4,18 +4,18 @@
 #include <unistd.h>
 #include <string.h>
 
-#include <sys/socket.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-
 #include <openssl/bn.h>
 #include <openssl/sha.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include <curl/curl.h>
+
 #include "json.h"
 #include "login.h"
 #include "protocol.h"
+
+#define WRITE_CALLBACK_CHUNK_SIZE 4096
 
 int handle_server_list_ping(struct conn *c) {
 	/* handle the empty request packet */
@@ -89,103 +89,51 @@ char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16]) {
 	return hash;
 }
 
-void ssl_cleanup(SSL_CTX *ctx, SSL *ssl) {
-	SSL_free(ssl);
-	SSL_CTX_free(ctx);
+struct write_ctx {
+	char *buf;
+	size_t buf_len;
+	size_t index;
+};
+
+static size_t write_callback(char *buf, size_t size, size_t buf_len, void *userdata) {
+	assert(size == 1);
+	struct write_ctx *ctx = userdata;
+	bool realloc_needed = ctx->index + buf_len > ctx->buf_len;
+	while (ctx->index + buf_len > ctx->buf_len) {
+		ctx->buf_len += WRITE_CALLBACK_CHUNK_SIZE;
+	}
+	if (realloc_needed) {
+		ctx->buf = reallocarray(ctx->buf, ctx->buf_len, sizeof(char));
+	}
+	memcpy(ctx->buf + ctx->index, buf, buf_len);
+	ctx->index += buf_len;
+	return buf_len;
 }
 
-int ping_sessionserver(const char *username, const char *hash, char **response) {
-	struct addrinfo hints = {0};
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-
-	struct addrinfo *res;
-	int err = getaddrinfo("sessionserver.mojang.com", "www", &hints, &res);
-	if (err != 0) {
-		fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(err));
-		return -1;
-	} else if (res == NULL) {
-		fprintf(stderr, "no results found by getaddrinfo()\n");
-		return -1;
+static CURLcode ping_sessionserver(const char *username, const char *server_id, char **body) {
+	const char *uri_base_str = "https://sessionserver.mojang.com/session/minecraft/hasJoined";
+	size_t uri_str_len = strlen(uri_base_str) + strlen(username) + strlen(server_id)
+		+ strlen("?username=&serverId=") + 1;
+	char *uri_str = calloc(uri_str_len, sizeof(char));
+	snprintf(uri_str, uri_str_len, "%s?username=%s&serverId=%s", uri_base_str, username, server_id);
+	CURL *curl = curl_easy_init();
+	if (curl) {
+		curl_easy_setopt(curl, CURLOPT_URL, uri_str);
+		struct write_ctx ctx;
+		ctx.buf_len = WRITE_CALLBACK_CHUNK_SIZE;
+		ctx.buf = calloc(WRITE_CALLBACK_CHUNK_SIZE, sizeof(char));
+		ctx.index = 0;
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+		CURLcode res = curl_easy_perform(curl);
+		free(uri_str);
+		curl_easy_cleanup(curl);
+		*body = ctx.buf;
+		return res;
+	} else {
+		free(uri_str);
+		return CURLE_FAILED_INIT;
 	}
-	int sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-	if (sfd == -1) {
-		perror("socket");
-		return -1;
-	}
-	struct sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
-	addr->sin_port = htons(443);
-	if (connect(sfd, res->ai_addr, res->ai_addrlen) == -1) {
-		perror("connect");
-		return -1;
-	}
-
-	SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
-	if (ssl_ctx == NULL) {
-		fprintf(stderr, "SSL_CTX_new(): %ld\n", ERR_get_error());
-		return -1;
-	}
-	SSL *ssl = SSL_new(ssl_ctx);
-	if (ssl == NULL) {
-		fprintf(stderr, "SSL_new(): %ld\n", ERR_get_error());
-		SSL_CTX_free(ssl_ctx);
-		return -1;
-	}
-	if (!SSL_set_fd(ssl, sfd)) {
-		fprintf(stderr, "SSL_set_fd(): %ld\n", ERR_get_error());
-		ssl_cleanup(ssl_ctx, ssl);
-		return -1;
-	}
-
-	err = SSL_connect(ssl);
-	if (err <= 0) {
-		fprintf(stderr, "SSL_connect(): %d\n", SSL_get_error(ssl, err));
-		char err_str[256];
-		ERR_error_string(ERR_get_error(), err_str);
-		printf("error: %s\n", err_str);
-		ssl_cleanup(ssl_ctx, ssl);
-		return -1;
-	}
-	freeaddrinfo(res);
-
-	const size_t buf_len = 2048;
-	*response = malloc(sizeof(char) * buf_len);
-	int write_len = snprintf(*response, buf_len, "GET /session/minecraft/hasJoined?username=%s&serverId=%s HTTP/1.1\r\nHost: sessionserver.mojang.com\r\nUser-Agent: Chowder :)\r\n\r\n", username, hash);
-	err = SSL_write(ssl, *response, write_len);
-	if (err <= 0) {
-		fprintf(stderr, "SSL_write(): %d\n", SSL_get_error(ssl, err));
-		ssl_cleanup(ssl_ctx, ssl);
-		return -1;
-	} else if (err != write_len) {
-		fprintf(stderr, "write mismatch! %d != %d\n", err, write_len);
-		ssl_cleanup(ssl_ctx, ssl);
-		return -1;
-	}
-
-	int n = SSL_read(ssl, *response, buf_len);
-	if (n <= 0) {
-		fprintf(stderr, "SSL_read(): %d\n", SSL_get_error(ssl, n));
-		ssl_cleanup(ssl_ctx, ssl);
-		return -1;
-	} else if ((size_t)n >= buf_len) {
-		fprintf(stderr, "response 2 big: n > %ld\n", buf_len);
-		ssl_cleanup(ssl_ctx, ssl);
-		return -1;
-	}
-	(*response)[n] = 0;
-
-	SSL_shutdown(ssl);
-	ssl_cleanup(ssl_ctx, ssl);
-	close(sfd);
-	return err;
-}
-
-char *read_body(char *resp) {
-	/* TODO: don't just ignore HTTP status and Content-Length */
-	char *body_start = strstr(resp, "\r\n\r\n");
-	if (body_start != NULL)
-		return body_start + 4;
-	return NULL;
 }
 
 static bool property_equal(void *property, void *search_name) {
@@ -194,18 +142,15 @@ static bool property_equal(void *property, void *search_name) {
 }
 
 int player_id(const char *hash, char uuid[36], struct player *player) {
-	char *response = NULL;
-	int response_len = ping_sessionserver(player->username, hash, &response);
-	if (response_len < 0) {
-		if (response != NULL)
-			free(response);
+	char *response_body = NULL;
+	CURLcode err = ping_sessionserver(player->username, hash, &response_body);
+	if (err != CURLE_OK) {
+		fprintf(stderr, "failed to ping sessionserver: %s", curl_easy_strerror(err));
+		free(response_body);
 		return -1;
 	}
-	char *body = read_body(response);
-	if (body == NULL)
-		return -1;
 	struct json_value *root;
-	struct json_err_ctx json_err = json_parse(body, &root);
+	struct json_err_ctx json_err = json_parse(response_body, &root);
 	if (json_err.type != JSON_OK) {
 		fprintf(stderr, "error parsing sessionserver json response\n");
 		return -1;
@@ -233,7 +178,7 @@ int player_id(const char *hash, char uuid[36], struct player *player) {
 		}
 	}
 	json_free(root);
-	free(response);
+	free(response_body);
 	if (uuid[0] == 0) {
 		fprintf(stderr, "no \"id\" field present in sessionserver response\n");
 		return -1;
