@@ -1,6 +1,6 @@
-#include <math.h>
-
 #include "section.h"
+#include <math.h>
+#include <stdlib.h>
 
 uint8_t bitmask(int size) {
 	/* probably not necessary xd */
@@ -57,4 +57,10 @@ void write_blockstate_at(struct section *s, int x, int y, int z, int value) {
 		int end_offset = 64 - p.offset;
 		s->blockstates[p.end_long] |= v >> end_offset;
 	}
+}
+
+void free_section(struct section *s) {
+	free(s->palette);
+	free(s->blockstates);
+	free(s);
 }

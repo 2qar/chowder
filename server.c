@@ -5,6 +5,7 @@
 
 #include "login.h"
 #include "protocol.h"
+#include "world.h"
 
 /* TODO: make a config.h file or smth for these settings */
 #define LEVEL_PATH "levels/default"
@@ -43,44 +44,18 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 		return -1;
 	}
 
-	struct region *r = world_region_at(w, 0, 0);
-	if (r == NULL) {
-		r = calloc(1, sizeof(struct region));
-		world_add_region(w, r);
-	}
-	FILE *f = fopen(LEVEL_PATH "/region/r.0.0.mca", "r");
-	if (f == NULL) {
-		fprintf(stderr, "error opening region file\n");
+	if (world_load_chunks(w, 0, 0, 16, 16) != ANVIL_OK) {
+		fprintf(stderr, "failed to load chunks\n");
 		return -1;
 	}
-	/* TODO: don't load chunks here or like this pls thanks */
-	size_t chunk_buf_len = 0;
-	Bytef *chunk_buf = NULL;
+	struct region *region = world_region_at(w, 0, 0);
 	for (int z = 0; z < 16; ++z) {
 		for (int x = 0; x < 16; ++x) {
-			struct chunk *chunk = r->chunks[z][x];
-			if (chunk == NULL) {
-				int uncompressed_len = read_chunk(f, x, z, &chunk_buf_len, &chunk_buf);
-				if (uncompressed_len > 0) {
-					chunk = parse_chunk(w->block_table, uncompressed_len, chunk_buf);
-					if (chunk == NULL) {
-						fprintf(stderr, "also panic\n");
-						return -1;
-					}
-				} else if (uncompressed_len < 0) {
-					fprintf(stderr, "fuckin panic");
-					return -1;
-				}
-			}
-
-			if (chunk != NULL) {
-				chunk_data(conn, chunk, x, z, true);
-				r->chunks[z][x] = chunk;
+			if (region->chunks[z][x] != NULL) {
+				chunk_data(conn, region->chunks[z][x], x, z, true);
 			}
 		}
 	}
-	fclose(f);
-	free(chunk_buf);
 
 	if (spawn_position(conn, 0, 0, 0) < 0) {
 		fprintf(stderr, "error sending spawn position\n");

@@ -70,8 +70,7 @@ int main() {
 	if (ctx == NULL)
 		exit(EXIT_FAILURE);
 
-	struct world *w = world_new();
-	w->block_table = block_table;
+	struct world *w = world_new(LEVEL_PATH, block_table);
 	struct node *connections = list_new();
 	struct packet packet;
 	packet_init(&packet);

@@ -1,8 +1,10 @@
 CC=cc
-CPPFLAGS=-I../../include -I../../include/json/include
+CPPFLAGS=-I../../ -I../../include -I../../include/json/include
 CFLAGS=-g -Wall -Wextra -Werror -pedantic -DBLOCK_NAMES
 LDFLAGS=-lm -lz
-OBJFILES=main.o ../../region.o ../../blocks.o ../../nbt.o ../../section.o ../../include/linked_list.o ../../include/hashmap.o ../../include/json/json.o
+MAIN_SOURCES=anvil.c blocks.c chunk.c section.c nbt.c include/linked_list.c include/hashmap.c include/json/json.c
+SOURCES=main.c $(addprefix ../../,$(MAIN_SOURCES))
+OBJFILES=$(SOURCES:.c=.o)
 VALGRIND_FLAGS=--leak-check=full --show-reachable=yes
 TARGET=cv
 
