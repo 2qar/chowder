@@ -1,5 +1,5 @@
 #include "json.h"
-#include "linked_list.h"
+#include "list.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

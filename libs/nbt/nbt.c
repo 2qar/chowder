@@ -1,12 +1,10 @@
+#include "nbt.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <arpa/inet.h>
 #include <endian.h>
-#include "include/linked_list.h"
-
-#include "nbt.h"
 
 struct nbt *nbt_new(enum tag t, char *name) {
 	struct nbt *root = calloc(1, sizeof(struct nbt));
@@ -285,7 +283,7 @@ static ssize_t nbt_unpack_node(struct nbt *root, size_t i, size_t len, const uin
 		valid_nbt = n > 0;
 		i += n;
 
-		list_append(root->data.children, sizeof(struct node *), &child);
+		list_append(root->data.children, sizeof(struct list *), &child);
 	}
 
 	if (!valid_nbt) {
@@ -315,7 +313,7 @@ static size_t nbt_data_len(struct nbt *);
 
 static size_t nbt_list_len(struct nbt_list *list) {
 	size_t len = 5;
-	struct node *l = list->head;
+	struct list *l = list->head;
 	while (!list_empty(l)) {
 		len += nbt_data_len(list_item(l));
 		l = list_next(l);
@@ -360,7 +358,7 @@ static size_t nbt_data_len(struct nbt *node) {
 static size_t nbt_node_len(struct nbt *n) {
 	size_t len = 0;
 
-	struct node *l = n->data.children;
+	struct list *l = n->data.children;
 	while (!list_empty(l)) {
 		struct nbt *child = list_item(l);
 		len += 3 + strlen(child->name);
@@ -447,7 +445,7 @@ static size_t nbt_write_list(struct nbt_list *list, uint8_t *data) {
 	++len;
 	len += nbt_write_int(list_len(list->head), data + 1);
 
-	struct node *l = list->head;
+	struct list *l = list->head;
 	while (!list_empty(l)) {
 		len += nbt_pack_node_data(list_item(l), data + len);
 		l = list_next(l);
@@ -508,7 +506,7 @@ static size_t nbt_pack_node_data(struct nbt *n, uint8_t *data) {
 static size_t nbt_pack_node(struct nbt *n, uint8_t *data) {
 	size_t len = 0;
 
-	struct node *l = n->data.children;
+	struct list *l = n->data.children;
 	while (!list_empty(l)) {
 		struct nbt *child = list_item(l);
 		data[len] = child->tag;
@@ -562,7 +560,7 @@ static struct nbt *nbt_list_search(struct nbt_list *l, enum tag t, char *name) {
 	assert(l->type == TAG_Compound);
 	struct nbt *node = NULL;
 
-	struct node *head = l->head;
+	struct list *head = l->head;
 	while (!list_empty(head) && node == NULL) {
 		struct nbt *item = list_item(head);
 		node = nbt_tree_search(item, t, name, true);
@@ -575,7 +573,7 @@ static struct nbt *nbt_list_search(struct nbt_list *l, enum tag t, char *name) {
 static struct nbt *nbt_tree_search(struct nbt *root, enum tag t, char *name, bool recurse) {
 	struct nbt *node = NULL;
 
-	struct node *head = root->data.children;
+	struct list *head = root->data.children;
 	while (!list_empty(head) && node == NULL) {
 		struct nbt *child = list_item(head);
 		if (child->tag == t && strcmp(child->name, name) == 0) {

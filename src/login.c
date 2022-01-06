@@ -1,3 +1,4 @@
+#include "login.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -12,7 +13,6 @@
 #include <curl/curl.h>
 
 #include "json.h"
-#include "login.h"
 #include "protocol_autogen.h"
 #include "protocol.h"
 
@@ -186,7 +186,7 @@ int player_id(const char *hash, char uuid[36], struct player *player) {
 	if (properties == NULL) {
 		fprintf(stderr, "no properties :(\n");
 	} else {
-		struct node *texture_node = list_find(properties->array, property_equal, "textures");
+		struct list *texture_node = list_find(properties->array, property_equal, "textures");
 		if (texture_node == NULL || list_item(texture_node) == NULL || list_empty(texture_node)) {
 			fprintf(stderr, "no textures :(\n");
 		} else {

@@ -1,9 +1,6 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <sys/socket.h>
-
 #include "conn.h"
-#include "player.h"
+#include <stdio.h>
+#include <sys/socket.h>
 
 int cipher_init(EVP_CIPHER_CTX **ctx, const uint8_t secret[16], int enc) {
 	*ctx = EVP_CIPHER_CTX_new();

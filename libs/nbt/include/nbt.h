@@ -5,8 +5,7 @@
 #define CHOWDER_NBT_H
 
 #include <stdint.h>
-#include "include/linked_list.h"
-
+#include "list.h"
 
 enum tag {
 	TAG_End,
@@ -34,7 +33,7 @@ union nbt_data {
 	char *string;
 	struct nbt_array *array;
 	struct nbt_list *list;
-	struct node *children;
+	struct list *children;
 };
 
 struct nbt {
@@ -55,7 +54,7 @@ struct nbt_array {
 
 struct nbt_list {
 	enum tag type;
-	struct node *head;
+	struct list *head;
 };
 
 struct nbt *nbt_new(enum tag, char *name);

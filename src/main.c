@@ -71,7 +71,7 @@ int main() {
 		exit(EXIT_FAILURE);
 
 	struct world *w = world_new(LEVEL_PATH, block_table);
-	struct node *connections = list_new();
+	struct list *connections = list_new();
 	struct packet packet;
 	packet_init(&packet);
 
@@ -100,7 +100,7 @@ int main() {
 			}
 		}
 
-		struct node *connection = connections;
+		struct list *connection = connections;
 		while (!list_empty(connection)) {
 			int status = server_play(list_item(connection), w);
 			if (status <= 0) {

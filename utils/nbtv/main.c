@@ -3,12 +3,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "../../nbt.h"
-#include "../../include/linked_list.h"
+#include "nbt.h"
+#include "list.h"
 
 #define INDENT_SPACES 4
 
-const char *tagNames[] = {"TAG_End", "TAG_Byte", "TAG_Short", "TAG_Int", "TAG_Long", "TAG_Float", "TAG_Double", "TAG_Byte_Array", "TAG_String", "TAG_List", "TAG_Compound", "TAG_Int_Array", "TAG_Long_Array"};
+const char *tag_names[] = {"TAG_End", "TAG_Byte", "TAG_Short", "TAG_Int", "TAG_Long", "TAG_Float", "TAG_Double", "TAG_Byte_Array", "TAG_String", "TAG_List", "TAG_Compound", "TAG_Int_Array", "TAG_Long_Array"};
 
 void put_indent(int level)
 {
@@ -69,7 +69,7 @@ void print_node_data(struct nbt *node, int indent)
 			print_array(node->data.array, indent);
 			break;
 		case TAG_List:
-			printf("%d %s entries\n", list_len(node->data.list->head), tagNames[node->data.list->type]);
+			printf("%d %s entries\n", list_len(node->data.list->head), tag_names[node->data.list->type]);
 			break;
 		default:
 			printf("idk how to handle this\n");
@@ -80,8 +80,8 @@ void print_node_data(struct nbt *node, int indent)
 void print_tree_rec(struct nbt *root, int indent)
 {
 	put_indent(indent);
-	struct node *children = root->data.children;
-	printf("%s('%s'): %d entries\n", tagNames[root->tag], root->name, list_len(root->data.children));
+	struct list *children = root->data.children;
+	printf("%s('%s'): %d entries\n", tag_names[root->tag], root->name, list_len(root->data.children));
 	put_indent(indent);
 	printf("{\n");
 
@@ -95,7 +95,7 @@ void print_tree_rec(struct nbt *root, int indent)
 			if (nbt->name != NULL) {
 				name = nbt->name;
 			}
-			printf("%s('%s'): ", tagNames[nbt->tag], name);
+			printf("%s('%s'): ", tag_names[nbt->tag], name);
 			print_node_data(nbt, indent + 1);
 		}
 		children = list_next(children);
@@ -127,11 +127,11 @@ void write_tree(struct nbt *root, char *filename)
 
 enum tag tag_name_to_number(char *name)
 {
-	int names = sizeof(tagNames) / sizeof(char *);
+	int names = sizeof(tag_names) / sizeof(char *);
 	int i = 0;
 	enum tag t = 0;
 	while (i < names && t == 0) {
-		if (strcmp(tagNames[i], name) == 0) {
+		if (strcmp(tag_names[i], name) == 0) {
 			t = i;
 		}
 		++i;

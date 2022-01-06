@@ -1,6 +1,7 @@
 #ifndef CHOWDER_JSON_H
 #define CHOWDER_JSON_H
 #include "hashmap.h"
+#include "list.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -24,7 +25,7 @@ struct json_value {
 	enum json_type type;
 	union {
 		struct json *object;
-		struct node *array;
+		struct list *array;
 		char *string;
 		int64_t integer;
 		double fraction;

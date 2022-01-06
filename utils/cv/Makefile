@@ -1,15 +1,19 @@
 CC=cc
-CPPFLAGS=-I../../ -I../../include -I../../include/json/include
+CPPFLAGS=$(addprefix -I,$(addsuffix /include/,$(lib_paths)) ../../src)
 CFLAGS=-g -Wall -Wextra -Werror -pedantic -DBLOCK_NAMES
 LDFLAGS=-lm -lz
-MAIN_SOURCES=anvil.c blocks.c chunk.c section.c nbt.c include/linked_list.c include/hashmap.c include/json/json.c
-SOURCES=main.c $(addprefix ../../,$(MAIN_SOURCES))
-OBJFILES=$(SOURCES:.c=.o)
-VALGRIND_FLAGS=--leak-check=full --show-reachable=yes
 TARGET=cv
 
-$(TARGET): $(OBJFILES)
+libs=anvil list hashmap json nbt
+lib_paths=$(addprefix ../../libs/,$(libs))
+vpath %.c $(lib_paths) ../../src
+sources=main.c anvil.c blocks.c chunk.c section.c nbt.c list.c hashmap.c json.c
+objects=$(sources:.c=.o)
+valgrind_flags=--leak-check=full --show-reachable=yes
+
+$(TARGET): $(objects)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
+.PHONY=leak
 leak: $(TARGET)
-	valgrind $(VALGRIND_FLAGS) ./$(TARGET) ../../levels/default/region/r.0.0.mca 0,0
+	valgrind $(valgrind_flags) ./$(TARGET) ../../levels/default/region/r.0.0.mca 0,0

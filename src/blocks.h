@@ -1,7 +1,7 @@
 #ifndef CHOWDER_BLOCK
 #define CHOWDER_BLOCK
 
-#include "include/hashmap.h"
+#include "hashmap.h"
 
 #ifdef BLOCK_NAMES
 extern size_t block_names_len;

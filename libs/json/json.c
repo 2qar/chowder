@@ -1,6 +1,4 @@
 #include "json.h"
-#include "hashmap.h"
-#include "linked_list.h"
 #include <ctype.h>
 #include <math.h>
 #include <stdbool.h>
@@ -201,8 +199,8 @@ static size_t parse_array(char *s, size_t open_bracket, struct json_err_ctx *err
 		struct json_value *json_array)
 {
 	json_array->type = JSON_ARRAY;
-	struct node *array = list_new();
-	struct node *tail = array;
+	struct list *array = list_new();
+	struct list *tail = array;
 	json_array->array = array;
 	size_t i = skip_whitespace(s, open_bracket + 1);
 	while (i != 0 && s[i] != '\0' && s[i] != ']') {
@@ -462,7 +460,7 @@ static bool json_object_equal(struct json_value *j1, struct json_value *j2)
 	}
 }
 
-static bool json_array_equal(struct node *a1, struct node *a2)
+static bool json_array_equal(struct list *a1, struct list *a2)
 {
 	while (!list_empty(a1) && !list_empty(a2)
 			&& json_equal(list_item(a1), list_item(a2))) {
@@ -516,7 +514,7 @@ void json_free(struct json_value *value)
 		free(value->object);
 		break;
 	case JSON_ARRAY:;
-		struct node *array = value->array;
+		struct list *array = value->array;
 		while (!list_empty(array)) {
 			json_free(list_remove(array));
 		}

@@ -4,3 +4,4 @@ tests/tests
 levels
 utils/cv/cv
 utils/nbtv/nbtv
+build/

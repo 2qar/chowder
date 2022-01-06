@@ -80,7 +80,7 @@ static size_t block_name_and_properties_length(struct nbt *block)
 
 	struct nbt *properties = nbt_get(block, TAG_Compound, "Properties");
 	if (properties != NULL) {
-		struct node *l = properties->data.children;
+		struct list *l = properties->data.children;
 		while (!list_empty(l)) {
 			struct nbt *property = list_item(l);
 			name_len += strlen(property->name);
@@ -106,7 +106,7 @@ static size_t sorted_properties(struct nbt *properties_nbt, struct nbt ***proper
 	size_t properties_len = list_len(properties_nbt->data.children);
 	*properties = malloc(sizeof(struct nbt *) * properties_len);
 
-	struct node *l = properties_nbt->data.children;
+	struct list *l = properties_nbt->data.children;
 	size_t i = 0;
 	while (!list_empty(l)) {
 		(*properties)[i] = list_item(l);
@@ -167,7 +167,7 @@ static void build_palette(struct hashmap *block_table, struct section *s, struct
 		s->bits_per_block = GLOBAL_BITS_PER_BLOCK;
 
 	s->palette = malloc(sizeof(int) * s->palette_len);
-	struct node *l = palette->head;
+	struct list *l = palette->head;
 	int i = 0;
 	while (!list_empty(l)) {
 		s->palette[i] = palette_entry_to_block_id(block_table, list_item(l));
@@ -193,7 +193,7 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table, size_t chunk_data_
 		return ANVIL_BAD_CHUNK;
 	}
 
-	struct node *l = sections->data.list->head;
+	struct list *l = sections->data.list->head;
 	c->sections_len = 0;
 	while (!list_empty(l)) {
 		struct nbt *s_nbt = list_item(l);

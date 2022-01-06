@@ -1,3 +1,4 @@
+#include "blocks.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,10 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "blocks.h"
-
 #include "hashmap.h"
-#include "linked_list.h"
+#include "list.h"
 #include "json.h"
 
 #ifdef BLOCK_NAMES
@@ -26,7 +25,7 @@ static void update_block_table_size(char *key, void *value, void *data)
 	int64_t *size = (int64_t *) data;
 	struct json_value *states = json_get(value, "states");
 	assert(states != NULL && states->type == JSON_ARRAY);
-	struct node *state_list = states->array;
+	struct list *state_list = states->array;
 	while (!list_empty(state_list)) {
 		struct json_value *state = list_item(state_list);
 		if (json_get(state, "properties") != NULL) {
@@ -123,7 +122,7 @@ static void add_block_states(char *name, void *value, void *data)
 	char name_with_properties[256] = {0};
 	struct json_value *states_json = json_get(value, "states");
 	assert(states_json != NULL && states_json->type == JSON_ARRAY);
-	struct node *states = states_json->array;
+	struct list *states = states_json->array;
 	while (!list_empty(states)) {
 		snprintf(name_with_properties, 256, "%s", name);
 		add_block_state(name_with_properties, list_item(states), block_table);
