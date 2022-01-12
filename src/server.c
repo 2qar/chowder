@@ -216,8 +216,6 @@ static void mc_position_to_xyz(uint64_t pos, int32_t *x, int16_t *y, int32_t *z)
 	*z = (pos << 26 >> 38);
 }
 
-// FIXME: the client is always responding with a teleport_confirm of 0 and a
-//        keep-alive-id of 1. what the heck
 int server_play(struct conn *conn, struct world *w) {
 	struct pollfd pfd = { .fd = conn->sfd, .events = POLLIN };
 	int polled;

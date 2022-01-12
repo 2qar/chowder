@@ -93,7 +93,7 @@ int packet_read_header(struct packet *p, int sfd) {
 bool packet_read_byte(struct packet *p, uint8_t *b) {
 	assert(p->packet_mode == PACKET_MODE_READ);
 
-	if (p->index + 1 == MAX_PACKET_LEN || p->index + 1 == p->packet_len) {
+	if (p->index >= MAX_PACKET_LEN || p->index >= p->packet_len) {
 		*b = 0;
 		return false;
 	}
