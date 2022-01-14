@@ -111,6 +111,16 @@ int main() {
 				connection = list_next(connection);
 			}
 		}
+		connection = connections;
+		struct protocol_do_err err = {0};
+		while (!list_empty(connection) && err.err_type == PROTOCOL_DO_ERR_SUCCESS) {
+			struct list *messages = ((struct conn *) list_item(connection))->messages_out;
+			err = server_send_messages(connections, messages);
+			connection = list_next(connection);
+		}
+		if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+			fprintf(stderr, "error sending message or some shit\n");
+		}
 
 		if (clock_gettime(CLOCK_MONOTONIC, &current_time) < 0) {
 			perror("clock_gettime");

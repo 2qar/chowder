@@ -1,6 +1,7 @@
 #include "conn.h"
 #include <stdio.h>
 #include <sys/socket.h>
+#include "message.h"
 
 int cipher_init(EVP_CIPHER_CTX **ctx, const uint8_t secret[16], int enc) {
 	*ctx = EVP_CIPHER_CTX_new();
@@ -13,6 +14,7 @@ int conn_init(struct conn *c, int sfd, const uint8_t secret[16]) {
 		return -1;
 	if (!cipher_init(&(c->_encrypt_ctx), secret, 1))
 		return -1;
+	c->messages_out = list_new();
 	return 0;
 }
 
@@ -22,6 +24,10 @@ void conn_finish(struct conn *c) {
 	EVP_CIPHER_CTX_free(c->_encrypt_ctx);
 	if (c->player != NULL)
 		player_free(c->player);
+	while (!list_empty(c->messages_out)) {
+		message_free(list_remove(c->messages_out));
+	}
+	list_free(c->messages_out);
 }
 
 bool read_encrypted_byte(void *src, uint8_t *b) {

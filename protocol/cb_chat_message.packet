@@ -1,0 +1,8 @@
+id = 0x0f
+
+Chat chat_json
+Enum(Byte) position {
+	CHAT = 0
+	SYSTEM_MESSAGE
+	GAME_INFO
+}

@@ -7,6 +7,7 @@
 #include "login.h"
 #include "protocol_autogen.h"
 #include "protocol.h"
+#include "strutil.h"
 #include "world.h"
 
 /* TODO: make a config.h file or smth for these settings */
@@ -225,7 +226,7 @@ int server_play(struct conn *conn, struct world *w) {
 			fprintf(stderr, "error parsing packet\n");
 			return -1;
 		}
-		struct protocol_read_action action = protocol_read_actions[conn->packet->packet_id];
+		struct protocol_action action = protocol_actions[conn->packet->packet_id];
 		if (action.name != NULL) {
 			void *data = NULL;
 			err = action.read(conn->packet, &data);
@@ -234,7 +235,15 @@ int server_play(struct conn *conn, struct world *w) {
 						action.name);
 			} else {
 				action.act(conn, w, data);
-				action.free(data);
+				if (action.sends_message) {
+					struct message *msg = message_new(conn->player,
+							conn->packet->packet_id, data,
+							action.free);
+					// FIXME: i hate list_append
+					list_append(conn->messages_out, sizeof(struct message *), &msg);
+				} else {
+					action.free(data);
+				}
 			}
 		} else {
 			printf("unimplemented packet 0x%02x\n", conn->packet->packet_id);
@@ -261,4 +270,26 @@ int server_play(struct conn *conn, struct world *w) {
 		conn->last_ping = time(NULL);
 	}
 	return 1;
+}
+
+struct protocol_do_err server_send_messages(struct list *connections, struct list *messages) {
+	struct protocol_do_err err = {0};
+	while (!list_empty(messages) && err.err_type == PROTOCOL_DO_ERR_SUCCESS) {
+		struct list *conns = connections;
+		struct message *msg = list_remove(messages);
+		struct message_action action = message_actions[msg->packet_id];
+		if (action.name != NULL) {
+			void *packet = action.message_to_packet(msg);
+			while (!list_empty(conns) && err.err_type == PROTOCOL_DO_ERR_SUCCESS) {
+				struct conn *conn = list_item(conns);
+				err = protocol_do_write(action.write, conn, packet);
+				conns = list_next(conns);
+			}
+			action.free(packet);
+		} else {
+			fprintf(stderr, "no message action for 0x%02x\n", msg->packet_id);
+		}
+		message_free(msg);
+	}
+	return err;
 }

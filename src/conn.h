@@ -8,6 +8,7 @@
 
 #include "packet.h"
 #include "player.h"
+#include "message.h"
 
 struct conn {
 	int sfd;
@@ -20,6 +21,7 @@ struct conn {
 	int64_t keep_alive_id;
 	time_t last_ping;
 	time_t last_pong;
+	struct list *messages_out;
 };
 
 int conn_init(struct conn *, int, const uint8_t[16]);
