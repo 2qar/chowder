@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "action.h"
 #include "login.h"
 #include "protocol_autogen.h"
 #include "protocol.h"
@@ -16,7 +17,8 @@ static struct conn *server_handshake(int sfd, struct packet *p) {
 	conn->sfd = sfd;
 	conn->packet = p;
 	struct handshake handshake_pack = {0};
-	struct protocol_do_err err = protocol_do_read((protocol_do_func) protocol_read_handshake, conn, &handshake_pack);
+	struct protocol_do_err err;
+	PROTOCOL_READ_S(handshake, conn, handshake_pack, err);
 	free(handshake_pack.server_address);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		// FIXME: non-shitty errors would be nice
@@ -88,26 +90,26 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 		.reduced_debug_info = false,
 		.enable_respawn_screen = true
 	};
-	struct protocol_do_err err = protocol_do_write((protocol_do_func) protocol_write_join_game, conn, &join_packet);
+	struct protocol_do_err err = PROTOCOL_WRITE(join_game, conn, &join_packet);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): join_game failed\n");
 		return -1;
 	}
 	puts("joined the game");
 	struct client_settings client_settings_pack;
-	err = protocol_do_read((protocol_do_func) protocol_read_client_settings, conn, &client_settings_pack);
+	PROTOCOL_READ_S(client_settings, conn, client_settings_pack, err);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): client_settings failed\n");
 		return -1;
 	}
 	struct cb_held_item_change held_item_change_pack = { .slot = 0 };
-	err = protocol_do_write((protocol_do_func) protocol_write_cb_held_item_change, conn, &held_item_change_pack);
+	err = PROTOCOL_WRITE(cb_held_item_change, conn, &held_item_change_pack);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): failed to send held_item_change failed\n");
 		return -1;
 	}
 	struct window_items window_items_pack = {0}; // TODO
-	err = protocol_do_write((protocol_do_func) protocol_write_window_items, conn, &window_items_pack);
+	err = PROTOCOL_WRITE(window_items, conn, &window_items_pack);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): failed to send window_items failed\n");
 		return -1;
@@ -135,7 +137,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 				chunk_data_pack.chunk_x = x;
 				chunk_data_pack.chunk_z = z;
 				write_chunk_to_packet(&chunk_data_pack, region->chunks[z][x]);
-				err = protocol_do_write((protocol_do_func) protocol_write_chunk_data, conn, &chunk_data_pack);
+				err = PROTOCOL_WRITE(chunk_data, conn, &chunk_data_pack);
 				if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 					fprintf(stderr, "server_initialize_play_state(): failed to send chunk data for chunk (%d,%d)\n", x, z);
 				}
@@ -146,7 +148,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 	nbt_free(nbt);
 
 	struct spawn_position spawn_pos = {0};
-	err = protocol_do_write((protocol_do_func) protocol_write_spawn_position, conn, &spawn_pos);
+	err = PROTOCOL_WRITE(spawn_position, conn, &spawn_pos);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): failed to send spawn_position failed\n");
 		return -1;
@@ -155,7 +157,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 	struct cb_player_position_look pos_and_look = {0};
 	conn->teleport_id = 123;
 	pos_and_look.teleport_id = conn->teleport_id;
-	err = protocol_do_write((protocol_do_func) protocol_write_cb_player_position_look, conn, &pos_and_look);
+	err = PROTOCOL_WRITE(cb_player_position_look, conn, &pos_and_look);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): failed to send player_position_look failed\n");
 		return -1;
@@ -177,7 +179,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 	info.action = PLAYER_INFO_ACTION_ADD_PLAYER;
 	info.players_len = 1;
 	info.players = &player;
-	err = protocol_do_write((protocol_do_func) protocol_write_player_info, conn, &info);
+	err = PROTOCOL_WRITE(player_info, conn, &info);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): failed to send player_position_look failed\n");
 		return -1;
@@ -210,12 +212,6 @@ struct conn *server_accept_connection(int sfd, struct packet *p, struct world *w
 	return c;
 }
 
-static void mc_position_to_xyz(uint64_t pos, int32_t *x, int16_t *y, int32_t *z) {
-	*x = pos >> 38;
-	*y = pos & 0xFFF;
-	*z = (pos << 26 >> 38);
-}
-
 int server_play(struct conn *conn, struct world *w) {
 	struct pollfd pfd = { .fd = conn->sfd, .events = POLLIN };
 	int polled;
@@ -229,80 +225,19 @@ int server_play(struct conn *conn, struct world *w) {
 			fprintf(stderr, "error parsing packet\n");
 			return -1;
 		}
-		switch (conn->packet->packet_id) {
-			case PROTOCOL_ID_TELEPORT_CONFIRM:;
-				struct teleport_confirm confirm;
-				err = protocol_read_teleport_confirm(conn->packet, &confirm);
-				if (err.err_type != PROTOCOL_ERR_SUCCESS) {
-					fprintf(stderr, "server_play(): error reading teleport_confirm\n");
-					break;
-				} else if (confirm.teleport_id != conn->teleport_id) {
-					fprintf(stderr, "teleport id mismatch\n");
-					fprintf(stderr, "\tconfirm = %d\n\treal = %d\n",
-							confirm.teleport_id,
-							conn->teleport_id);
-					break;
-				}
-				break;
-			case PROTOCOL_ID_SB_KEEP_ALIVE:;
-				struct sb_keep_alive keep_alive_pack;
-				err = protocol_read_sb_keep_alive(conn->packet, &keep_alive_pack);
-				if (err.err_type != PROTOCOL_ERR_SUCCESS) {
-					fprintf(stderr, "server_play(): failed to read keep alive\n");
-					break;
-				} else if (keep_alive_pack.keep_alive_id != conn->keep_alive_id) {
-					fprintf(stderr, "keep_alive_id mismatch. perish\n");
-					fprintf(stderr, "\tgot %ld\n\texpected %ld\n",
-							keep_alive_pack.keep_alive_id,
-							conn->keep_alive_id);
-					break;
-				} else {
-					conn->last_pong = time(NULL);
-				}
-				break;
-			case PROTOCOL_ID_PLAYER_BLOCK_PLACEMENT:;
-				struct player_block_placement block_placed_pack;
-				err = protocol_read_player_block_placement(conn->packet, &block_placed_pack);
-				if (err.err_type != PROTOCOL_ERR_SUCCESS) {
-					fprintf(stderr, "server_play(): failed to read player_block_placement\n");
-					break;
-				} else {
-					int32_t x, z;
-					int16_t y;
-					mc_position_to_xyz(block_placed_pack.location, &x, &y, &z);
-					switch (block_placed_pack.face) {
-						case PLAYER_BLOCK_PLACEMENT_FACE_BOTTOM:
-							--y;
-							break;
-						case PLAYER_BLOCK_PLACEMENT_FACE_TOP:
-							++y;
-							break;
-						case PLAYER_BLOCK_PLACEMENT_FACE_NORTH:
-							--z;
-							break;
-						case PLAYER_BLOCK_PLACEMENT_FACE_SOUTH:
-							++z;
-							break;
-						case PLAYER_BLOCK_PLACEMENT_FACE_WEST:
-							--x;
-							break;
-						case PLAYER_BLOCK_PLACEMENT_FACE_EAST:
-							++x;
-							break;
-					}
-					struct chunk *chunk = world_chunk_at(w, x, z);
-					int i = (y / 16) + 1;
-					if (i < chunk->sections_len && chunk->sections[i]->bits_per_block > 0) {
-						printf("INFO: writing blockstate to (%d,%d,%d)\n", x, y, z);
-						/* TODO: track what the player is holding and write that block
-						 *       instead of some random block from the palette */
-						write_blockstate_at(chunk->sections[i], x, y, z, chunk->sections[i]->palette_len - 1);
-					}
-				}
-				break;
-			default:
-				//printf("unimplemented packet 0x%02x\n", conn->packet->packet_id);
-				break;
+		struct protocol_read_action action = protocol_read_actions[conn->packet->packet_id];
+		if (action.name != NULL) {
+			void *data = NULL;
+			err = action.read(conn->packet, &data);
+			if (err.err_type != PROTOCOL_ERR_SUCCESS) {
+				fprintf(stderr, "server_play(): error reading %s\n",
+						action.name);
+			} else {
+				action.act(conn, w, data);
+				action.free(data);
+			}
+		} else {
+			printf("unimplemented packet 0x%02x\n", conn->packet->packet_id);
 		}
 	}
 	if (polled < 0) {
@@ -318,8 +253,7 @@ int server_play(struct conn *conn, struct world *w) {
 	if (time(NULL) - conn->last_ping > 3) {
 		conn->keep_alive_id = rand();
 		struct cb_keep_alive keep_alive_pack = { .keep_alive_id = conn->keep_alive_id };
-		struct protocol_do_err do_err = protocol_do_write((protocol_do_func) protocol_write_cb_keep_alive,
-				conn, &keep_alive_pack);
+		struct protocol_do_err do_err = PROTOCOL_WRITE(cb_keep_alive, conn, &keep_alive_pack);
 		if (do_err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 			fprintf(stderr, "server_play(): error sending keep alive\n");
 			return -1;

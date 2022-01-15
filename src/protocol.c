@@ -1,6 +1,6 @@
 #include "protocol.h"
 
-struct protocol_do_err protocol_do_write(protocol_do_func write_func, struct conn *conn, void *packet_data)
+struct protocol_do_err protocol_do_write(protocol_write_func write_func, struct conn *conn, void *packet_data)
 {
 	struct protocol_do_err err = {0};
 	struct protocol_err protocol_err = write_func(conn->packet, packet_data);
@@ -18,7 +18,7 @@ struct protocol_do_err protocol_do_write(protocol_do_func write_func, struct con
 	return err;
 }
 
-struct protocol_do_err protocol_do_read(protocol_do_func read_func, struct conn *conn, void *packet_data)
+struct protocol_do_err protocol_do_read(protocol_read_func read_func, struct conn *conn, void **packet_data_ptr)
 {
 	struct protocol_do_err err = {0};
 	int read_err = conn_packet_read_header(conn);
@@ -27,7 +27,7 @@ struct protocol_do_err protocol_do_read(protocol_do_func read_func, struct conn 
 		err.read_err = read_err;
 		return err;
 	}
-	struct protocol_err protocol_err = read_func(conn->packet, packet_data);
+	struct protocol_err protocol_err = read_func(conn->packet, packet_data_ptr);
 	if (protocol_err.err_type != PROTOCOL_ERR_SUCCESS) {
 		err.err_type = PROTOCOL_DO_ERR_PROTOCOL;
 		err.protocol_err = protocol_err;

@@ -31,7 +31,7 @@ int handle_server_list_ping(struct conn *conn) {
 	status_pack.status_json = "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
 		"\"players\": { \"max\": 4, \"online\": 0, \"sample\": [] },"
 		"\"description\": { \"text\": \"description\" } }";
-	struct protocol_do_err err = protocol_do_write((protocol_do_func) protocol_write_server_list_ping, conn, &status_pack);
+	struct protocol_do_err err = PROTOCOL_WRITE(server_list_ping, conn, &status_pack);
 	// FIXME: this error handling sucks, but it could be worse
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "handle_server_list_ping: server_list_ping failed\n");
@@ -39,13 +39,13 @@ int handle_server_list_ping(struct conn *conn) {
 	}
 
 	struct ping ping;
-	err = protocol_do_read((protocol_do_func) protocol_read_ping, conn, &ping);
+	PROTOCOL_READ_S(ping, conn, ping, err);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "handle_server_list_ping: ping failed\n");
 		return -1;
 	}
 	struct pong pong = { .payload = ping.payload };
-	err = protocol_do_write((protocol_do_func) protocol_write_pong, conn, &pong);
+	err = PROTOCOL_WRITE(pong, conn, &pong);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "handle_server_list_ping: pong failed\n");
 		return -1;
@@ -254,7 +254,8 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 	(void) l_ctx;
 	c->player = calloc(1, sizeof(struct player));
 	struct login_start login_start_pack;
-	struct protocol_do_err err = protocol_do_read((protocol_do_func) protocol_read_login_start, c, &login_start_pack);
+	struct protocol_do_err err;
+	PROTOCOL_READ_S(login_start, c, login_start_pack, err);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "login: failed to read login_start packet\n");
 		return -1;
@@ -273,13 +274,13 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 		.verify_token_len = 4,
 		.verify_token = verify_token,
 	};
-	err = protocol_do_write((protocol_do_func) protocol_write_encryption_request, c, &encryption_request_pack);
+	err = PROTOCOL_WRITE(encryption_request, c, &encryption_request_pack);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "login: failed to send encryption request\n");
 		return -1;
 	}
 	struct encryption_response encryption_response_pack;
-	err = protocol_do_read((protocol_do_func) protocol_read_encryption_response, c, &encryption_response_pack);
+	PROTOCOL_READ_S(encryption_response, c, encryption_response_pack, err);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "login: failed to read encryption response\n");
 		return -1;
@@ -325,7 +326,7 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 		.uuid = formatted_uuid,
 		.username = c->player->username,
 	};
-	err = protocol_do_write((protocol_do_func) protocol_write_login_success, c, &login_success_pack);
+	err = PROTOCOL_WRITE(login_success, c, &login_success_pack);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "login: error sending login success\n");
 		return -1;
