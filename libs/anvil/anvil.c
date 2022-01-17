@@ -178,8 +178,6 @@ static void build_palette(struct hashmap *block_table, struct section *s, struct
 
 enum anvil_err anvil_parse_chunk(struct hashmap *block_table, size_t chunk_data_len, uint8_t *chunk_data, struct chunk **out)
 {
-	struct chunk *c = malloc(sizeof(struct chunk));
-
 	struct nbt *n;
 	size_t n_len = nbt_unpack(chunk_data_len, chunk_data, &n);
 	if (n_len == 0) {
@@ -194,6 +192,7 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table, size_t chunk_data_
 	}
 
 	struct list *l = sections->data.list->head;
+	struct chunk *c = malloc(sizeof(struct chunk));
 	c->sections_len = 0;
 	while (!list_empty(l)) {
 		struct nbt *s_nbt = list_item(l);
@@ -267,16 +266,22 @@ enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx, struct chunk *
 	int z = ctx->z1;
 	int x = ctx->x1;
 	// FIXME: ANVIL_CHUNK_MISSING shouldn't be an acceptable error
+	int missing = 0;
 	while (z < ctx->z2 && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
 		x = ctx->x1;
 		while (x < ctx->x2 && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
 			err = get_chunk(ctx->region_file, ctx->block_table, x, z, &chunk_buf_len, &chunk_buf, &chunk);
-			chunks[z][x] = chunk;
+			if (err == ANVIL_CHUNK_MISSING) {
+				++missing;
+			} else {
+				chunks[z][x] = chunk;
+			}
 			++x;
 		}
 		++z;
 	}
 	free(chunk_buf);
+	ctx->missing = missing;
 	if (err != ANVIL_OK && err != ANVIL_CHUNK_MISSING) {
 		ctx->err_x = x - 1;
 		ctx->err_z = z - 1;

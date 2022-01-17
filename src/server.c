@@ -44,7 +44,8 @@ static bool is_air(int blockstate) {
 	return blockstate == 0 || blockstate == 9129 || blockstate == 9130;
 }
 
-static void write_chunk_to_packet(struct chunk_data *packet, struct chunk *chunk) {
+static void write_chunk_to_packet(struct chunk_data *packet, struct chunk *chunk,
+		int32_t *data_len) {
 	int primary_bit_mask = 0;
 	for (int i = 1; i < chunk->sections_len; ++i) {
 		int has_blocks = chunk->sections[i]->bits_per_block > 0;
@@ -57,12 +58,21 @@ static void write_chunk_to_packet(struct chunk_data *packet, struct chunk *chunk
 			++(packet->data_len);
 		}
 	}
+	if (packet->data_len > *data_len) {
+		*data_len = packet->data_len;
+		packet->data = reallocarray(packet->data, packet->data_len,
+				sizeof(struct chunk_data_chunk_section));
+		if (packet->data == NULL) {
+			perror("reallocarray");
+			return;
+		}
+	}
 	packet->biomes = chunk->biomes;
-	packet->data = calloc(packet->data_len, sizeof(struct chunk_data_chunk_section));
 	int j = 0;
 	for (int i = 0; i < chunk->sections_len; ++i) {
 		struct section *section = chunk->sections[i];
 		if (section->bits_per_block > 0) {
+			packet->data[j].block_count = 0;
 			for (int b = 0; b < TOTAL_BLOCKSTATES; ++b) {
 				int palette_idx = read_blockstate_at(section, b % 16, (b / 16) % 16, b / (16*16));
 				if (!is_air(section->palette[palette_idx])) {
@@ -103,6 +113,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 		fprintf(stderr, "server_initialize_play_state(): client_settings failed\n");
 		return -1;
 	}
+	free(client_settings_pack.locale);
 	struct cb_held_item_change held_item_change_pack = { .slot = 0 };
 	err = PROTOCOL_WRITE(cb_held_item_change, conn, &held_item_change_pack);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
@@ -132,12 +143,13 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 	struct nbt *motion_blocking = nbt_get(nbt, TAG_Long_Array, "MOTION_BLOCKING");
 	motion_blocking->data.array = arr;
 	chunk_data_pack.heightmaps = nbt;
+	int32_t data_len = 0;
 	for (int z = 0; z < 16; ++z) {
 		for (int x = 0; x < 16; ++x) {
 			if (region->chunks[z][x] != NULL) {
 				chunk_data_pack.chunk_x = x;
 				chunk_data_pack.chunk_z = z;
-				write_chunk_to_packet(&chunk_data_pack, region->chunks[z][x]);
+				write_chunk_to_packet(&chunk_data_pack, region->chunks[z][x], &data_len);
 				err = PROTOCOL_WRITE(chunk_data, conn, &chunk_data_pack);
 				if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 					fprintf(stderr, "server_initialize_play_state(): failed to send chunk data for chunk (%d,%d)\n", x, z);
@@ -147,6 +159,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w) {
 	}
 	arr->data.longs = NULL;
 	nbt_free(nbt);
+	free(chunk_data_pack.data);
 
 	struct spawn_position spawn_pos = {0};
 	err = PROTOCOL_WRITE(spawn_position, conn, &spawn_pos);

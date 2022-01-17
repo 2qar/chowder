@@ -262,6 +262,7 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 	}
 	size_t username_len = strlen(login_start_pack.username);
 	memcpy(c->player->username, login_start_pack.username, username_len);
+	free(login_start_pack.username);
 	c->player->username[username_len] = '\0';
 	uint8_t verify_token[4];
 	for (int i = 0; i < 4; ++i) {
@@ -285,24 +286,40 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 		fprintf(stderr, "login: failed to read encryption response\n");
 		return -1;
 	}
-	if (decrypt_bytes(l_ctx->decrypt_ctx,
+	int decrypt_res_shared = decrypt_bytes(l_ctx->decrypt_ctx,
 				(size_t *) &encryption_response_pack.shared_secret_len,
-				&encryption_response_pack.shared_secret) <= 0) {
+				&encryption_response_pack.shared_secret);
+	int decrypt_res_verify = decrypt_bytes(l_ctx->decrypt_ctx,
+				(size_t *) &encryption_response_pack.verify_token_len,
+				&encryption_response_pack.verify_token);
+	if (decrypt_res_shared <= 0 || decrypt_res_verify <= 0) {
+		free(encryption_response_pack.shared_secret);
+		free(encryption_response_pack.verify_token);
+	}
+	if (decrypt_res_shared <= 0) {
 		fprintf(stderr, "login: failed to decrypt shared secret\n");
 		return -1;
-	} else if (decrypt_bytes(l_ctx->decrypt_ctx,
-				(size_t *) &encryption_response_pack.verify_token_len,
-				&encryption_response_pack.verify_token) <= 0) {
+	} else if (decrypt_res_verify <= 0) {
 		fprintf(stderr, "login: failed to decrypt verify token\n");
 		return -1;
 	} else if (encryption_response_pack.verify_token_len != 4 ||
 			memcmp(verify_token, encryption_response_pack.verify_token, 4)) {
+		free(encryption_response_pack.verify_token);
 		// FIXME: this shouldn't return the same """error""" as serious
 		//        errors like decryption failing
 		fprintf(stderr, "login: verify_token mismatch\n");
 		return -1;
 	}
+	free(encryption_response_pack.verify_token);
+	/* FIXME: rename conn_init() -> conn_crypto_init(), and only use it to
+	 *        initialize the encrypt / decrypt contexts */
+	if (conn_init(c, c->sfd, encryption_response_pack.shared_secret) < 0) {
+		free(encryption_response_pack.shared_secret);
+		fprintf(stderr, "error initializing encryption\n");
+		return -1;
+	}
 	char *hash = mc_hash(l_ctx->pubkey_len, l_ctx->pubkey, encryption_response_pack.shared_secret);
+	free(encryption_response_pack.shared_secret);
 	if (!hash) {
 		fputs("error generating SHA1 hash", stderr);
 		return -1;
@@ -311,13 +328,6 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 	if (player_id(hash, uuid, c->player) < 0)
 		return -1;
 	free(hash);
-
-	/* FIXME: rename conn_init() -> conn_crypto_init(), and only use it to
-	 *        initialize the encrypt / decrypt contexts */
-	if (conn_init(c, c->sfd, encryption_response_pack.shared_secret) < 0) {
-		fprintf(stderr, "error initializing encryption\n");
-		return -1;
-	}
 
 	char formatted_uuid[37] = {0};
 	format_uuid(uuid, formatted_uuid);

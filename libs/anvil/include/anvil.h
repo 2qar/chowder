@@ -21,6 +21,7 @@ struct anvil_get_chunks_ctx {
 	int x1, z1;
 	int x2, z2;
 	int err_x, err_z;
+	int missing;
 };
 
 enum anvil_err anvil_read_chunk(FILE *region_file, int x, int z, size_t *chunk_buf_len, Bytef **chunk, size_t *out_len);
