@@ -1,6 +1,6 @@
 # chowder
 
-A Minecraft server, because I'm bored and wish the default server was faster.
+A Minecraft 1.15.2 server, because I'm bored and wish the default server was faster.
 
 In it's current state, it's not really functional.
 
