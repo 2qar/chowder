@@ -1,5 +1,6 @@
 #include "login.h"
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -12,9 +13,11 @@
 
 #include <curl/curl.h>
 
+#include "config.h"
 #include "json.h"
 #include "protocol_autogen.h"
 #include "protocol.h"
+#include "strutil.h"
 
 #define WRITE_CALLBACK_CHUNK_SIZE 4096
 
@@ -28,10 +31,15 @@ int handle_server_list_ping(struct conn *conn) {
 
 	struct server_list_ping status_pack;
 	/* TODO: don't hardcode, insert state instead (once state exists) */
-	status_pack.status_json = "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
-		"\"players\": { \"max\": 4, \"online\": 0, \"sample\": [] },"
-		"\"description\": { \"text\": \"description\" } }";
+	if (asprintf(&status_pack.status_json, "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
+			"\"players\": { \"max\": %u, \"online\": 0, \"sample\": [] },"
+			"\"description\": { \"text\": \"%s\" } }",
+			server_properties.max_players, server_properties.motd) < 0) {
+		fprintf(stderr, "failed to write status_json: %s\n", strerror(errno));
+		return -1;
+	}
 	struct protocol_do_err err = PROTOCOL_WRITE(server_list_ping, conn, &status_pack);
+	free(status_pack.status_json);
 	// FIXME: this error handling sucks, but it could be worse
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "handle_server_list_ping: server_list_ping failed\n");

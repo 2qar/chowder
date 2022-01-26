@@ -117,6 +117,7 @@ struct chunk *world_chunk_at(struct world *w, int x, int z)
 
 void world_free(struct world *w)
 {
+	free(w->world_path);
 	hashmap_free(w->block_table, true, free);
 	hashmap_free(w->regions, true, (free_item_func) free_region);
 }
