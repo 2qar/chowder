@@ -1,12 +1,13 @@
 #include "world.h"
-#include <assert.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <string.h>
 
 #include "anvil.h"
 #include "region.h"
+
+#include <assert.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct world {
 	char *world_path;
@@ -58,17 +59,19 @@ struct region *world_region_at(struct world *w, int x, int z)
 	return r;
 }
 
-enum anvil_err world_load_chunks(struct world *w, int x1, int z1, int x2, int z2)
+enum anvil_err world_load_chunks(struct world *w, int x1, int z1, int x2,
+				 int z2)
 {
 	// FIXME: this restriction shouldn't be a thing
 	int r_x = x1 / 32;
 	int r_z = z1 / 32;
 	assert(r_x == x2 / 32 && r_z == z2 / 32);
-	size_t region_file_path_len = strlen(w->world_path) + strlen("/region/r...mca")
-		+ digits(r_x) + digits(r_z) + 1;
+	size_t region_file_path_len = strlen(w->world_path)
+				      + strlen("/region/r...mca") + digits(r_x)
+				      + digits(r_z) + 1;
 	char *region_file_path = calloc(region_file_path_len, sizeof(char));
-	snprintf(region_file_path, region_file_path_len, "%s/region/r.%d.%d.mca",
-			w->world_path, r_x, r_z);
+	snprintf(region_file_path, region_file_path_len,
+		 "%s/region/r.%d.%d.mca", w->world_path, r_x, r_z);
 	printf("region file path: \"%s\"\n", region_file_path);
 	FILE *region_file = fopen(region_file_path, "r");
 	free(region_file_path);
@@ -94,7 +97,8 @@ enum anvil_err world_load_chunks(struct world *w, int x1, int z1, int x2, int z2
 	enum anvil_err err = anvil_get_chunks(&ctx, r->chunks);
 	fclose(region_file);
 	if (err != ANVIL_OK) {
-		fprintf(stderr, "failed to load chunk at (%d,%d): %d\n", ctx.err_x, ctx.err_z, err);
+		fprintf(stderr, "failed to load chunk at (%d,%d): %d\n",
+			ctx.err_x, ctx.err_z, err);
 	}
 	return err;
 }

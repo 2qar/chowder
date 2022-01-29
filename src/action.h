@@ -1,13 +1,14 @@
 #ifndef CHOWDER_PROTOCOL_ACTION_H
 #define CHOWDER_PROTOCOL_ACTION_H
 
-#include <stdbool.h>
-#include <stdint.h>
 #include "conn.h"
 #include "message.h"
 #include "packet.h"
 #include "protocol_types.h"
 #include "world.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 typedef void (*protocol_act_func)(struct conn *, struct world *, void *data);
 typedef void (*protocol_free_func)(void *data);

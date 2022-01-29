@@ -1,12 +1,14 @@
-#include "sb_chat_message.h"
-#include <stdio.h>
 #include "cb_chat_message.h"
 #include "conn.h"
 #include "message.h"
+#include "sb_chat_message.h"
 #include "strutil.h"
 #include "world.h"
 
-void protocol_act_sb_chat_message(struct conn *conn, struct world *world, void *data)
+#include <stdio.h>
+
+void protocol_act_sb_chat_message(struct conn *conn, struct world *world,
+				  void *data)
 {
 	(void) world;
 
@@ -17,10 +19,11 @@ void protocol_act_sb_chat_message(struct conn *conn, struct world *world, void *
 void *message_to_packet_sb_chat_message(struct message *msg)
 {
 	struct cb_chat_message *packet = malloc(sizeof(struct cb_chat_message));
-	asprintf(&packet->chat_json, "{\"translate\":\"chat.type.text\","
-			"\"with\":[{\"text\":\"%s\"},{\"text\":\"%s\"}]}",
-			msg->from->username,
-			((struct sb_chat_message *) msg->packet_struct)->message);
+	asprintf(&packet->chat_json,
+		 "{\"translate\":\"chat.type.text\","
+		 "\"with\":[{\"text\":\"%s\"},{\"text\":\"%s\"}]}",
+		 msg->from->username,
+		 ((struct sb_chat_message *) msg->packet_struct)->message);
 	packet->position = CB_CHAT_MESSAGE_POSITION_CHAT;
 	return packet;
 }

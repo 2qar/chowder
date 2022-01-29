@@ -1,18 +1,18 @@
 #include "anvil.h"
 
-#include <endian.h>
-
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-#include <math.h>
-
 #include "nbt.h"
+
+#include <assert.h>
+#include <endian.h>
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define COMPRESSION_TYPE_ZLIB 2
 #define GLOBAL_BITS_PER_BLOCK 14
 
-enum anvil_err anvil_read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, Bytef **chunk, size_t *out_len)
+enum anvil_err anvil_read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len,
+				Bytef **chunk, size_t *out_len)
 {
 	fseek(f, 4 * ((x & 31) + (z & 31) * 32), SEEK_SET);
 	int chunk_offset = 0;
@@ -31,13 +31,14 @@ enum anvil_err anvil_read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, By
 	compressed_len -= 1;
 	assert(fgetc(f) == COMPRESSION_TYPE_ZLIB);
 	Bytef *compressed_chunk = malloc(sizeof(Bytef) * compressed_len);
-	int n = fread(compressed_chunk, (size_t) sizeof(Bytef), compressed_len, f);
+	int n =
+	    fread(compressed_chunk, (size_t) sizeof(Bytef), compressed_len, f);
 	if (n == 0) {
 		perror("fread");
 		return ANVIL_READ_ERROR;
 	}
 
-	z_stream stream = {0};
+	z_stream stream = { 0 };
 	stream.next_in = compressed_chunk;
 	stream.avail_in = compressed_len;
 	int z_err = inflateInit(&stream);
@@ -51,7 +52,8 @@ enum anvil_err anvil_read_chunk(FILE *f, int x, int z, size_t *chunk_buf_len, By
 	}
 	stream.next_out = *chunk;
 	stream.avail_out = *chunk_buf_len;
-	while ((z_err = inflate(&stream, Z_NO_FLUSH)) == Z_BUF_ERROR || (z_err == Z_OK && stream.avail_out == 0)) {
+	while ((z_err = inflate(&stream, Z_NO_FLUSH)) == Z_BUF_ERROR
+	       || (z_err == Z_OK && stream.avail_out == 0)) {
 		*chunk_buf_len += 4096;
 		stream.avail_out = 4096;
 		*chunk = reallocarray(*chunk, *chunk_buf_len, sizeof(Bytef));
@@ -101,7 +103,8 @@ static int block_property_cmp(const void *p1, const void *p2)
 	return strcoll(prop1->name, prop2->name);
 }
 
-static size_t sorted_properties(struct nbt *properties_nbt, struct nbt ***properties)
+static size_t sorted_properties(struct nbt *properties_nbt,
+				struct nbt ***properties)
 {
 	size_t properties_len = list_len(properties_nbt->data.children);
 	*properties = malloc(sizeof(struct nbt *) * properties_len);
@@ -115,12 +118,14 @@ static size_t sorted_properties(struct nbt *properties_nbt, struct nbt ***proper
 	}
 
 	if (properties_len > 1) {
-		qsort(*properties, properties_len, sizeof(struct nbt *), block_property_cmp);
+		qsort(*properties, properties_len, sizeof(struct nbt *),
+		      block_property_cmp);
 	}
 	return properties_len;
 }
 
-static int palette_entry_to_block_id(struct hashmap *block_table, struct nbt *block)
+static int palette_entry_to_block_id(struct hashmap *block_table,
+				     struct nbt *block)
 {
 	size_t name_len = block_name_and_properties_length(block);
 	char *name = malloc(sizeof(char) * (name_len + 1));
@@ -157,7 +162,8 @@ static int palette_entry_to_block_id(struct hashmap *block_table, struct nbt *bl
 	}
 }
 
-static void build_palette(struct hashmap *block_table, struct section *s, struct nbt_list *palette)
+static void build_palette(struct hashmap *block_table, struct section *s,
+			  struct nbt_list *palette)
 {
 	s->palette_len = list_len(palette->head);
 	s->bits_per_block = (int) ceil(log2(s->palette_len));
@@ -170,13 +176,16 @@ static void build_palette(struct hashmap *block_table, struct section *s, struct
 	struct list *l = palette->head;
 	int i = 0;
 	while (!list_empty(l)) {
-		s->palette[i] = palette_entry_to_block_id(block_table, list_item(l));
+		s->palette[i] =
+		    palette_entry_to_block_id(block_table, list_item(l));
 		++i;
 		l = list_next(l);
 	}
 }
 
-enum anvil_err anvil_parse_chunk(struct hashmap *block_table, size_t chunk_data_len, uint8_t *chunk_data, struct chunk **out)
+enum anvil_err anvil_parse_chunk(struct hashmap *block_table,
+				 size_t chunk_data_len, uint8_t *chunk_data,
+				 struct chunk **out)
 {
 	struct nbt *n;
 	size_t n_len = nbt_unpack(chunk_data_len, chunk_data, &n);
@@ -210,9 +219,11 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table, size_t chunk_data_
 			build_palette(block_table, s, palette->data.list);
 		}
 
-		struct nbt *blockstates = nbt_get(s_nbt, TAG_Long_Array, "BlockStates");
+		struct nbt *blockstates =
+		    nbt_get(s_nbt, TAG_Long_Array, "BlockStates");
 		if (blockstates != NULL) {
-			s->blockstates = (uint64_t *) blockstates->data.array->data.longs;
+			s->blockstates =
+			    (uint64_t *) blockstates->data.array->data.longs;
 			blockstates->data.array->data.longs = NULL;
 		}
 
@@ -234,27 +245,34 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table, size_t chunk_data_
 	return ANVIL_OK;
 }
 
-enum anvil_err get_chunk(FILE *region_file, struct hashmap *block_table, int x, int z, size_t *chunk_buf_len, Bytef **chunk_buf, struct chunk **out)
+enum anvil_err get_chunk(FILE *region_file, struct hashmap *block_table, int x,
+			 int z, size_t *chunk_buf_len, Bytef **chunk_buf,
+			 struct chunk **out)
 {
 	size_t chunk_data_len = 0;
-	enum anvil_err err = anvil_read_chunk(region_file, x, z, chunk_buf_len, chunk_buf, &chunk_data_len);
+	enum anvil_err err = anvil_read_chunk(region_file, x, z, chunk_buf_len,
+					      chunk_buf, &chunk_data_len);
 	if (err == ANVIL_OK) {
-		return anvil_parse_chunk(block_table, chunk_data_len, *chunk_buf, out);
+		return anvil_parse_chunk(block_table, chunk_data_len,
+					 *chunk_buf, out);
 	} else {
 		return err;
 	}
 }
 
-enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table, int x, int z, struct chunk **out)
+enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
+			       int x, int z, struct chunk **out)
 {
 	size_t chunk_buf_len = 0;
 	Bytef *chunk_buf = NULL;
-	enum anvil_err err = get_chunk(region_file, block_table, x, z, &chunk_buf_len, &chunk_buf, out);
+	enum anvil_err err = get_chunk(region_file, block_table, x, z,
+				       &chunk_buf_len, &chunk_buf, out);
 	free(chunk_buf);
 	return err;
 }
 
-enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx, struct chunk *chunks[32][32])
+enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx,
+				struct chunk *chunks[32][32])
 {
 	assert(ctx->x1 / 32 == ctx->x2 / 32);
 	assert(ctx->z1 / 32 == ctx->z2 / 32);
@@ -269,8 +287,10 @@ enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx, struct chunk *
 	int missing = 0;
 	while (z < ctx->z2 && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
 		x = ctx->x1;
-		while (x < ctx->x2 && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
-			err = get_chunk(ctx->region_file, ctx->block_table, x, z, &chunk_buf_len, &chunk_buf, &chunk);
+		while (x < ctx->x2
+		       && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
+			err = get_chunk(ctx->region_file, ctx->block_table, x,
+					z, &chunk_buf_len, &chunk_buf, &chunk);
 			if (err == ANVIL_CHUNK_MISSING) {
 				++missing;
 			} else {

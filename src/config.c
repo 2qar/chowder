@@ -1,8 +1,9 @@
 #include "config.h"
+
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
 #include <time.h>
 
@@ -42,26 +43,23 @@ static struct estr_mapping gamemode_mapping[] = {
 };
 
 static struct estr_mapping difficulty_mapping[] = {
-	{ "easy", 1 },
-	{ "peaceful", 0 },
-	{ "normal", 2 },
-	{ "hard", 3 },
-	{ 0 },
+	{ "easy", 1 }, { "peaceful", 0 }, { "normal", 2 }, { "hard", 3 }, { 0 },
 };
 
-#define CV_MAP(TYPE, NAME, PROP_NAME, FIELD, DEFAULT_VALUE) \
-	{ .type = TYPE, \
-		.prop_name = PROP_NAME, \
-		.prop_field = &server_properties.NAME, \
-		.data.FIELD = DEFAULT_VALUE }
-#define CV_MAP_NUM(PROP_NAME, NAME, DEFAULT_VALUE) \
+#define CV_MAP(TYPE, NAME, PROP_NAME, FIELD, DEFAULT_VALUE)                    \
+	{                                                                      \
+		.type = TYPE, .prop_name = PROP_NAME,                          \
+		.prop_field = &server_properties.NAME,                         \
+		.data.FIELD = DEFAULT_VALUE                                    \
+	}
+#define CV_MAP_NUM(PROP_NAME, NAME, DEFAULT_VALUE)                             \
 	CV_MAP(CV_NUM, NAME, PROP_NAME, default_num, DEFAULT_VALUE)
-#define CV_MAP_BOOL(PROP_NAME, NAME, DEFAULT_VALUE) \
+#define CV_MAP_BOOL(PROP_NAME, NAME, DEFAULT_VALUE)                            \
 	CV_MAP(CV_BOOL, NAME, PROP_NAME, default_bool, DEFAULT_VALUE)
-#define CV_MAP_STR(PROP_NAME, NAME, DEFAULT_VALUE) \
+#define CV_MAP_STR(PROP_NAME, NAME, DEFAULT_VALUE)                             \
 	CV_MAP(CV_STR, NAME, PROP_NAME, default_str, DEFAULT_VALUE)
-#define CV_MAP_ESTR(PROP_NAME, NAME) \
-	CV_MAP(CV_ESTR, NAME, PROP_NAME, default_estr, NAME ## _mapping)
+#define CV_MAP_ESTR(PROP_NAME, NAME)                                           \
+	CV_MAP(CV_ESTR, NAME, PROP_NAME, default_estr, NAME##_mapping)
 
 static struct config_value config_mappings[] = {
 	CV_MAP_ESTR("gamemode", gamemode),
@@ -70,7 +68,8 @@ static struct config_value config_mappings[] = {
 	CV_MAP_STR("motd", motd, "A Minecraft Server"),
 	CV_MAP_BOOL("pvp", pvp, true),
 	CV_MAP_ESTR("difficulty", difficulty),
-	CV_MAP_NUM("network-compression-threshold", network_compression_threshold, 256),
+	CV_MAP_NUM("network-compression-threshold",
+		   network_compression_threshold, 256),
 	CV_MAP_BOOL("require-resource-pack", require_resource_pack, false),
 	CV_MAP_NUM("max-tick-time", max_tick_time, 60000),
 	CV_MAP_NUM("max-players", max_players, 20),
@@ -85,7 +84,8 @@ static struct config_value config_mappings[] = {
 	CV_MAP_BOOL("sync-chunk-writes", sync_chunk_writes, true),
 	CV_MAP_NUM("op-permission-level", op_permission_level, 4),
 	CV_MAP_STR("resource-pack", resource_pack, NULL),
-	CV_MAP_NUM("entity-broadcast-range-percentage", entity_broadcast_range_percentage, 100),
+	CV_MAP_NUM("entity-broadcast-range-percentage",
+		   entity_broadcast_range_percentage, 100),
 	CV_MAP_NUM("player-idle-timeout", player_idle_timeout, 0),
 	CV_MAP_BOOL("force-gamemode", force_gamemode, false),
 	CV_MAP_NUM("rate-limit", rate_limit, 0),
@@ -104,7 +104,7 @@ static struct config_value config_mappings[] = {
 };
 
 static int process_estr(char *value_str, struct estr_mapping *mapping,
-		uint32_t *out)
+			uint32_t *out)
 {
 	struct estr_mapping *value = mapping;
 	while (value->name != NULL && strcmp(value->name, value_str))
@@ -121,7 +121,8 @@ static int process_value(int line_num, char *line)
 	while (line[eq_idx] != '\0' && line[eq_idx] != '=')
 		++eq_idx;
 	if (eq_idx == 0 && line[eq_idx] == '=') {
-		fprintf(stderr, "server.properties: no name on line %d\n", line_num);
+		fprintf(stderr, "server.properties: no name on line %d\n",
+			line_num);
 		return -1;
 	}
 	line[eq_idx] = '\0';
@@ -129,43 +130,47 @@ static int process_value(int line_num, char *line)
 	while (value->prop_name != NULL && strcmp(line, value->prop_name))
 		++value;
 	if (value->prop_name == NULL) {
-		fprintf(stderr, "server.properties: invalid config property \"%s\"\n",
-				line);
+		fprintf(stderr,
+			"server.properties: invalid config property \"%s\"\n",
+			line);
 		return 0;
 	}
 
-	char *value_str = line + eq_idx+1;
+	char *value_str = line + eq_idx + 1;
 	int err = 0;
 	switch (value->type) {
-		case CV_NUM:
-			if (sscanf(value_str, "%u", (uint32_t *) value->prop_field) != 1)
-				err = 1;
-			break;
-		case CV_BOOL:
-			if (strcmp(value_str, "false"))
-				*(bool *)(value->prop_field) = false;
-			else if (strcmp(value_str, "true"))
-				*(bool *)(value->prop_field) = true;
-			else
-				err = 1;
-			break;
-		case CV_STR:
-			if (*value_str != '\0')
-				*(char **)(value->prop_field) = strdup(value_str);
-			break;
-		case CV_ESTR:
-			if (process_estr(value_str, value->data.default_estr,
-					value->prop_field) < 0)
-				return -1;
-			break;
-		default:
-			fprintf(stderr, "unrecognized cv_type for \"%s\"\n",
-					value->prop_name);
+	case CV_NUM:
+		if (sscanf(value_str, "%u", (uint32_t *) value->prop_field)
+		    != 1)
+			err = 1;
+		break;
+	case CV_BOOL:
+		if (strcmp(value_str, "false"))
+			*(bool *) (value->prop_field) = false;
+		else if (strcmp(value_str, "true"))
+			*(bool *) (value->prop_field) = true;
+		else
+			err = 1;
+		break;
+	case CV_STR:
+		if (*value_str != '\0')
+			*(char **) (value->prop_field) = strdup(value_str);
+		break;
+	case CV_ESTR:
+		if (process_estr(value_str, value->data.default_estr,
+				 value->prop_field)
+		    < 0)
 			return -1;
+		break;
+	default:
+		fprintf(stderr, "unrecognized cv_type for \"%s\"\n",
+			value->prop_name);
+		return -1;
 	}
 	if (err == -1) {
-		fprintf(stderr, "server.properties: invalid value for %s: \"%s\"\n",
-				value->prop_name, value_str);
+		fprintf(stderr,
+			"server.properties: invalid value for %s: \"%s\"\n",
+			value->prop_name, value_str);
 	}
 	return err;
 }
@@ -178,7 +183,8 @@ enum config_err read_server_properties(const char *path)
 	char line[LINE_LEN];
 	int line_num = 1;
 	enum config_err err = CONFIG_OK;
-	while (err == CONFIG_OK && fgets(line, LINE_LEN, properties_file) != NULL) {
+	while (err == CONFIG_OK
+	       && fgets(line, LINE_LEN, properties_file) != NULL) {
 		if (line[0] != '#' && line[0] != '\n') {
 			int i = 0;
 			while (line[i] != '\n')
@@ -197,44 +203,44 @@ int set_default_server_properties(const char *path)
 {
 	FILE *conf_file = fopen(path, "w");
 	if (conf_file == NULL) {
-		fprintf(stderr, "failed to open \"%s\": %s",
-				path, strerror(errno));
+		fprintf(stderr, "failed to open \"%s\": %s", path,
+			strerror(errno));
 		return -1;
 	}
 
 	time_t now = time(NULL);
-	fprintf(conf_file, "# Minecraft server properties\n# %s",
-			ctime(&now));
+	fprintf(conf_file, "# Minecraft server properties\n# %s", ctime(&now));
 
 	struct config_value *value = config_mappings;
 	while (value->prop_name != NULL) {
 		fprintf(conf_file, "%s=", value->prop_name);
 		switch (value->type) {
-			case CV_NUM:
-				fprintf(conf_file, "%u", value->data.default_num);
-				*(uint32_t *) value->prop_field = value->data
-					.default_num;
-				break;
-			case CV_BOOL:
-				fprintf(conf_file, value->data.default_bool ?
-						"true" : "false");
-				*(bool *) value->prop_field = value->data
-					.default_bool;
-				break;
-			case CV_STR:
-				if (value->data.default_str != NULL) {
-					fprintf(conf_file, "%s", value->data.default_str);
-					*(char **) value->prop_field = strdup(value->data
-							.default_str);
-				}
-				break;
-			case CV_ESTR:
-				fprintf(conf_file, "%s", value->data.default_estr->name);
-				*(int *) value->prop_field = value->data
-					.default_estr->value;
-				break;
-			default:
-				break;
+		case CV_NUM:
+			fprintf(conf_file, "%u", value->data.default_num);
+			*(uint32_t *) value->prop_field =
+			    value->data.default_num;
+			break;
+		case CV_BOOL:
+			fprintf(conf_file,
+				value->data.default_bool ? "true" : "false");
+			*(bool *) value->prop_field = value->data.default_bool;
+			break;
+		case CV_STR:
+			if (value->data.default_str != NULL) {
+				fprintf(conf_file, "%s",
+					value->data.default_str);
+				*(char **) value->prop_field =
+				    strdup(value->data.default_str);
+			}
+			break;
+		case CV_ESTR:
+			fprintf(conf_file, "%s",
+				value->data.default_estr->name);
+			*(int *) value->prop_field =
+			    value->data.default_estr->value;
+			break;
+		default:
+			break;
 		}
 		fputc('\n', conf_file);
 		++value;
@@ -248,7 +254,7 @@ void free_server_properties()
 	struct config_value *value = config_mappings;
 	while (value->prop_name != NULL) {
 		if (value->type == CV_STR)
-			free(*(char **)value->prop_field);
+			free(*(char **) value->prop_field);
 		++value;
 	}
 }

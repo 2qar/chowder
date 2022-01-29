@@ -1,48 +1,58 @@
 #include "login.h"
-#include <assert.h>
-#include <errno.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <string.h>
-
-#include <openssl/bn.h>
-#include <openssl/sha.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-
-#include <curl/curl.h>
 
 #include "config.h"
 #include "json.h"
-#include "protocol_autogen.h"
 #include "protocol.h"
+#include "protocol_autogen.h"
 #include "strutil.h"
+
+#include <assert.h>
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <curl/curl.h>
+#include <openssl/bn.h>
+#include <openssl/err.h>
+#include <openssl/sha.h>
+#include <openssl/ssl.h>
 
 #define WRITE_CALLBACK_CHUNK_SIZE 4096
 
-int handle_server_list_ping(struct conn *conn) {
+int handle_server_list_ping(struct conn *conn)
+{
 	/* handle the empty request packet */
 	int packet_err = packet_read_header(conn->packet, conn->sfd);
 	if (packet_err < 0) {
-		fprintf(stderr, "handle_server_list_ping: failed to read packet header: %d\n", packet_err);
+		fprintf(stderr,
+			"handle_server_list_ping: failed to read packet "
+			"header: %d\n",
+			packet_err);
 		return -1;
 	}
 
 	struct server_list_ping status_pack;
 	/* TODO: don't hardcode, insert state instead (once state exists) */
-	if (asprintf(&status_pack.status_json, "{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
-			"\"players\": { \"max\": %u, \"online\": 0, \"sample\": [] },"
-			"\"description\": { \"text\": \"%s\" } }",
-			server_properties.max_players, server_properties.motd) < 0) {
-		fprintf(stderr, "failed to write status_json: %s\n", strerror(errno));
+	if (asprintf(
+		&status_pack.status_json,
+		"{ \"version\": { \"name\": \"1.15.2\", \"protocol\": 578 },"
+		"\"players\": { \"max\": %u, \"online\": 0, \"sample\": [] },"
+		"\"description\": { \"text\": \"%s\" } }",
+		server_properties.max_players, server_properties.motd)
+	    < 0) {
+		fprintf(stderr, "failed to write status_json: %s\n",
+			strerror(errno));
 		return -1;
 	}
-	struct protocol_do_err err = PROTOCOL_WRITE(server_list_ping, conn, &status_pack);
+	struct protocol_do_err err =
+	    PROTOCOL_WRITE(server_list_ping, conn, &status_pack);
 	free(status_pack.status_json);
 	// FIXME: this error handling sucks, but it could be worse
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
-		fprintf(stderr, "handle_server_list_ping: server_list_ping failed\n");
+		fprintf(stderr,
+			"handle_server_list_ping: server_list_ping failed\n");
 		return -1;
 	}
 
@@ -61,8 +71,9 @@ int handle_server_list_ping(struct conn *conn) {
 	return 0;
 }
 
-char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16]) {
-	SHA_CTX c = {0};
+char *mc_hash(size_t der_len, const uint8_t *der, const uint8_t secret[16])
+{
+	SHA_CTX c = { 0 };
 	if (!SHA1_Init(&c)) {
 		fprintf(stderr, "SHA1_init(): %lu\n", ERR_get_error());
 		return NULL;
@@ -124,7 +135,9 @@ struct write_ctx {
 	size_t index;
 };
 
-static size_t write_callback(char *buf, size_t size, size_t buf_len, void *userdata) {
+static size_t write_callback(char *buf, size_t size, size_t buf_len,
+			     void *userdata)
+{
 	assert(size == 1);
 	struct write_ctx *ctx = userdata;
 	bool realloc_needed = ctx->index + buf_len > ctx->buf_len;
@@ -139,12 +152,17 @@ static size_t write_callback(char *buf, size_t size, size_t buf_len, void *userd
 	return buf_len;
 }
 
-static CURLcode ping_sessionserver(const char *username, const char *server_id, char **body) {
-	const char *uri_base_str = "https://sessionserver.mojang.com/session/minecraft/hasJoined";
-	size_t uri_str_len = strlen(uri_base_str) + strlen(username) + strlen(server_id)
-		+ strlen("?username=&serverId=") + 1;
+static CURLcode ping_sessionserver(const char *username, const char *server_id,
+				   char **body)
+{
+	const char *uri_base_str =
+	    "https://sessionserver.mojang.com/session/minecraft/hasJoined";
+	size_t uri_str_len = strlen(uri_base_str) + strlen(username)
+			     + strlen(server_id)
+			     + strlen("?username=&serverId=") + 1;
 	char *uri_str = calloc(uri_str_len, sizeof(char));
-	snprintf(uri_str, uri_str_len, "%s?username=%s&serverId=%s", uri_base_str, username, server_id);
+	snprintf(uri_str, uri_str_len, "%s?username=%s&serverId=%s",
+		 uri_base_str, username, server_id);
 	CURL *curl = curl_easy_init();
 	if (curl) {
 		curl_easy_setopt(curl, CURLOPT_URL, uri_str);
@@ -165,16 +183,20 @@ static CURLcode ping_sessionserver(const char *username, const char *server_id, 
 	}
 }
 
-static bool property_equal(void *property, void *search_name) {
+static bool property_equal(void *property, void *search_name)
+{
 	struct json_value *name = json_get(property, "name");
 	return name->type == JSON_STRING && !strcmp(name->string, search_name);
 }
 
-int player_id(const char *hash, char uuid[36], struct player *player) {
+int player_id(const char *hash, char uuid[36], struct player *player)
+{
 	char *response_body = NULL;
-	CURLcode err = ping_sessionserver(player->username, hash, &response_body);
+	CURLcode err =
+	    ping_sessionserver(player->username, hash, &response_body);
 	if (err != CURLE_OK) {
-		fprintf(stderr, "failed to ping sessionserver: %s", curl_easy_strerror(err));
+		fprintf(stderr, "failed to ping sessionserver: %s",
+			curl_easy_strerror(err));
 		free(response_body);
 		return -1;
 	}
@@ -194,42 +216,50 @@ int player_id(const char *hash, char uuid[36], struct player *player) {
 	if (properties == NULL) {
 		fprintf(stderr, "no properties :(\n");
 	} else {
-		struct list *texture_node = list_find(properties->array, property_equal, "textures");
-		if (texture_node == NULL || list_item(texture_node) == NULL || list_empty(texture_node)) {
+		struct list *texture_node =
+		    list_find(properties->array, property_equal, "textures");
+		if (texture_node == NULL || list_item(texture_node) == NULL
+		    || list_empty(texture_node)) {
 			fprintf(stderr, "no textures :(\n");
 		} else {
-			struct json_value *texture_value = json_get(list_item(texture_node), "value");
+			struct json_value *texture_value =
+			    json_get(list_item(texture_node), "value");
 			if (texture_value == NULL) {
 				fprintf(stderr, "no texture value fuck this\n");
 			} else {
-				player->textures = strdup(texture_value->string);
+				player->textures =
+				    strdup(texture_value->string);
 			}
 		}
 	}
 	json_free(root);
 	free(response_body);
 	if (uuid[0] == 0) {
-		fprintf(stderr, "no \"id\" field present in sessionserver response\n");
+		fprintf(stderr,
+			"no \"id\" field present in sessionserver response\n");
 		return -1;
 	}
 	return 0;
 }
 
-/* return a UUID formatted with dashes (kinda dumb implementation but it works xd) */
-void format_uuid(char uuid[32], char formatted[37]) {
+/* return a UUID formatted with dashes (kinda dumb implementation but it works
+ * xd) */
+void format_uuid(char uuid[32], char formatted[37])
+{
 	strncat(formatted, uuid, 8);
 	formatted[8] = '-';
-	strncat(formatted, uuid+8, 4);
+	strncat(formatted, uuid + 8, 4);
 	formatted[13] = '-';
-	strncat(formatted, uuid+12, 4);
+	strncat(formatted, uuid + 12, 4);
 	formatted[18] = '-';
-	strncat(formatted, uuid+16, 4);
+	strncat(formatted, uuid + 16, 4);
 	formatted[23] = '-';
-	strncat(formatted, uuid+20, 12);
+	strncat(formatted, uuid + 20, 12);
 }
 
 /* convert a UUID string to network-order bytes */
-void uuid_bytes(char uuid[33], uint8_t bytes[16]) {
+void uuid_bytes(char uuid[33], uint8_t bytes[16])
+{
 	BIGNUM *bn = BN_new();
 	BN_hex2bn(&bn, uuid);
 	assert(BN_num_bytes(bn) == 16);
@@ -237,16 +267,20 @@ void uuid_bytes(char uuid[33], uint8_t bytes[16]) {
 	BN_free(bn);
 }
 
-/* frees the encrypted buffer pointed at by *buf, replacing it with the decrypted
- * buffer, and puts the new length in *buf_len */
-static int decrypt_bytes(EVP_PKEY_CTX *decrypt_ctx, size_t *buf_len, uint8_t **buf) {
+/* frees the encrypted buffer pointed at by *buf, replacing it with the
+ * decrypted buffer, and puts the new length in *buf_len */
+static int decrypt_bytes(EVP_PKEY_CTX *decrypt_ctx, size_t *buf_len,
+			 uint8_t **buf)
+{
 	size_t new_buf_len;
-	int err = EVP_PKEY_decrypt(decrypt_ctx, NULL, &new_buf_len, *buf, *buf_len);
+	int err =
+	    EVP_PKEY_decrypt(decrypt_ctx, NULL, &new_buf_len, *buf, *buf_len);
 	if (err != 1) {
 		return err;
 	}
 	uint8_t *new_buf = malloc(new_buf_len);
-	err = EVP_PKEY_decrypt(decrypt_ctx, new_buf, &new_buf_len, *buf, *buf_len);
+	err = EVP_PKEY_decrypt(decrypt_ctx, new_buf, &new_buf_len, *buf,
+			       *buf_len);
 	if (err != 1) {
 		free(new_buf);
 		return err;
@@ -258,7 +292,8 @@ static int decrypt_bytes(EVP_PKEY_CTX *decrypt_ctx, size_t *buf_len, uint8_t **b
 	}
 }
 
-int login(struct conn *c, struct login_ctx *l_ctx) {
+int login(struct conn *c, struct login_ctx *l_ctx)
+{
 	(void) l_ctx;
 	c->player = calloc(1, sizeof(struct player));
 	struct login_start login_start_pack;
@@ -294,12 +329,14 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 		fprintf(stderr, "login: failed to read encryption response\n");
 		return -1;
 	}
-	int decrypt_res_shared = decrypt_bytes(l_ctx->decrypt_ctx,
-				(size_t *) &encryption_response_pack.shared_secret_len,
-				&encryption_response_pack.shared_secret);
-	int decrypt_res_verify = decrypt_bytes(l_ctx->decrypt_ctx,
-				(size_t *) &encryption_response_pack.verify_token_len,
-				&encryption_response_pack.verify_token);
+	int decrypt_res_shared = decrypt_bytes(
+	    l_ctx->decrypt_ctx,
+	    (size_t *) &encryption_response_pack.shared_secret_len,
+	    &encryption_response_pack.shared_secret);
+	int decrypt_res_verify =
+	    decrypt_bytes(l_ctx->decrypt_ctx,
+			  (size_t *) &encryption_response_pack.verify_token_len,
+			  &encryption_response_pack.verify_token);
 	if (decrypt_res_shared <= 0 || decrypt_res_verify <= 0) {
 		free(encryption_response_pack.shared_secret);
 		free(encryption_response_pack.verify_token);
@@ -310,8 +347,9 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 	} else if (decrypt_res_verify <= 0) {
 		fprintf(stderr, "login: failed to decrypt verify token\n");
 		return -1;
-	} else if (encryption_response_pack.verify_token_len != 4 ||
-			memcmp(verify_token, encryption_response_pack.verify_token, 4)) {
+	} else if (encryption_response_pack.verify_token_len != 4
+		   || memcmp(verify_token,
+			     encryption_response_pack.verify_token, 4)) {
 		free(encryption_response_pack.verify_token);
 		// FIXME: this shouldn't return the same """error""" as serious
 		//        errors like decryption failing
@@ -326,18 +364,19 @@ int login(struct conn *c, struct login_ctx *l_ctx) {
 		fprintf(stderr, "error initializing encryption\n");
 		return -1;
 	}
-	char *hash = mc_hash(l_ctx->pubkey_len, l_ctx->pubkey, encryption_response_pack.shared_secret);
+	char *hash = mc_hash(l_ctx->pubkey_len, l_ctx->pubkey,
+			     encryption_response_pack.shared_secret);
 	free(encryption_response_pack.shared_secret);
 	if (!hash) {
 		fputs("error generating SHA1 hash", stderr);
 		return -1;
 	}
-	char uuid[33] = {0};
+	char uuid[33] = { 0 };
 	if (player_id(hash, uuid, c->player) < 0)
 		return -1;
 	free(hash);
 
-	char formatted_uuid[37] = {0};
+	char formatted_uuid[37] = { 0 };
 	format_uuid(uuid, formatted_uuid);
 	uuid_bytes(uuid, c->player->uuid);
 	struct login_success login_success_pack = {

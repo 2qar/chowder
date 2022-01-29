@@ -1,8 +1,9 @@
 #include "message.h"
+
 #include <stdlib.h>
 
-struct message *message_new(struct player *from, int packet_id, void *packet_struct,
-		void (*packet_free)(void *))
+struct message *message_new(struct player *from, int packet_id,
+			    void *packet_struct, void (*packet_free)(void *))
 {
 	struct message *message = malloc(sizeof(struct message));
 	message->from = from;

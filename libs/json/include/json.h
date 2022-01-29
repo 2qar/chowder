@@ -2,6 +2,7 @@
 #define CHOWDER_JSON_H
 #include "hashmap.h"
 #include "list.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -59,8 +60,10 @@ struct json_value *json_new();
 /* json_parse() modifies the given string, so don't try to print or operate on
  * it unless you want to be disappointed */
 struct json_err_ctx json_parse(char *json_string, struct json_value **out);
-struct json_err_ctx json_parse_file(FILE *json_file, struct json_value **out, char **out_json_string);
-void json_set(struct json_value *root_object, char *key, struct json_value *value);
+struct json_err_ctx json_parse_file(FILE *json_file, struct json_value **out,
+				    char **out_json_string);
+void json_set(struct json_value *root_object, char *key,
+	      struct json_value *value);
 struct json_value *json_get(struct json_value *root_object, char *key);
 size_t json_members(struct json_value *object);
 bool json_equal(struct json_value *, struct json_value *);

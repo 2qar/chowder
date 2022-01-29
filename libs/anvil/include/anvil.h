@@ -1,10 +1,12 @@
 #ifndef CHOWDER_ANVIL_H
 #define CHOWDER_ANVIL_H
 
-#include <stdio.h>
-#include <zlib.h>
 #include "chunk.h"
 #include "hashmap.h"
+
+#include <stdio.h>
+
+#include <zlib.h>
 
 enum anvil_err {
 	ANVIL_OK,
@@ -24,14 +26,20 @@ struct anvil_get_chunks_ctx {
 	int missing;
 };
 
-enum anvil_err anvil_read_chunk(FILE *region_file, int x, int z, size_t *chunk_buf_len, Bytef **chunk, size_t *out_len);
-enum anvil_err anvil_parse_chunk(struct hashmap *block_table, size_t chunk_data_len, uint8_t *chunk_data, struct chunk **out);
+enum anvil_err anvil_read_chunk(FILE *region_file, int x, int z,
+				size_t *chunk_buf_len, Bytef **chunk,
+				size_t *out_len);
+enum anvil_err anvil_parse_chunk(struct hashmap *block_table,
+				 size_t chunk_data_len, uint8_t *chunk_data,
+				 struct chunk **out);
 
 /* anvil_get_chunk() and anvil_get_chunks() take chunk coordinates within the
  * region they're in. They're equivalent to calling anvil_read_chunk() and
  * anvil_parse_chunk(), except they handle the buffer junk for you. */
-enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table, int x, int z, struct chunk **out);
+enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
+			       int x, int z, struct chunk **out);
 /* assumes (x1,z1) and (x2,z2) are in the same region. */
-enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *, struct chunk *out[32][32]);
+enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *,
+				struct chunk *out[32][32]);
 
 #endif // CHOWDER_ANVIL_H

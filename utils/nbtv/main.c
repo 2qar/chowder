@@ -1,14 +1,18 @@
 /* nbtv pretty-prints binary NBT blobs. */
+#include "list.h"
+#include "nbt.h"
+
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-
-#include "nbt.h"
-#include "list.h"
 
 #define INDENT_SPACES 4
 
-const char *tag_names[] = {"TAG_End", "TAG_Byte", "TAG_Short", "TAG_Int", "TAG_Long", "TAG_Float", "TAG_Double", "TAG_Byte_Array", "TAG_String", "TAG_List", "TAG_Compound", "TAG_Int_Array", "TAG_Long_Array"};
+const char *tag_names[] = { "TAG_End",	     "TAG_Byte",       "TAG_Short",
+			    "TAG_Int",	     "TAG_Long",       "TAG_Float",
+			    "TAG_Double",    "TAG_Byte_Array", "TAG_String",
+			    "TAG_List",	     "TAG_Compound",   "TAG_Int_Array",
+			    "TAG_Long_Array" };
 
 void put_indent(int level)
 {
@@ -24,17 +28,17 @@ void print_array(struct nbt_array *a, int indent)
 		put_indent(indent + 1);
 		printf("%d: ", i);
 		switch (a->type) {
-			case TAG_Byte_Array:
-				printf("%d\n", a->data.bytes[i]);
-				break;
-			case TAG_Int_Array:
-				printf("%d\n", a->data.ints[i]);
-				break;
-			case TAG_Long_Array:
-				printf("%ld\n", a->data.longs[i]);
-				break;
-			default:
-				break;
+		case TAG_Byte_Array:
+			printf("%d\n", a->data.bytes[i]);
+			break;
+		case TAG_Int_Array:
+			printf("%d\n", a->data.ints[i]);
+			break;
+		case TAG_Long_Array:
+			printf("%ld\n", a->data.longs[i]);
+			break;
+		default:
+			break;
 		}
 	}
 }
@@ -42,38 +46,39 @@ void print_array(struct nbt_array *a, int indent)
 void print_node_data(struct nbt *node, int indent)
 {
 	switch (node->tag) {
-		case TAG_Byte:
-			printf("%d\n", node->data.t_byte);
-			break;
-		case TAG_Short:
-			printf("%d\n", node->data.t_short);
-			break;
-		case TAG_Int:
-			printf("%d\n", node->data.t_int);
-			break;
-		case TAG_Long:
-			printf("%ld\n", node->data.t_long);
-			break;
-		case TAG_Float:
-			printf("%f\n", node->data.t_float);
-			break;
-		case TAG_Double:
-			printf("%f\n", node->data.t_double);
-			break;
-		case TAG_String:
-			printf("'%s'\n", node->data.string);
-			break;
-		case TAG_Byte_Array:
-		case TAG_Int_Array:
-		case TAG_Long_Array:
-			print_array(node->data.array, indent);
-			break;
-		case TAG_List:
-			printf("%d %s entries\n", list_len(node->data.list->head), tag_names[node->data.list->type]);
-			break;
-		default:
-			printf("idk how to handle this\n");
-			break;
+	case TAG_Byte:
+		printf("%d\n", node->data.t_byte);
+		break;
+	case TAG_Short:
+		printf("%d\n", node->data.t_short);
+		break;
+	case TAG_Int:
+		printf("%d\n", node->data.t_int);
+		break;
+	case TAG_Long:
+		printf("%ld\n", node->data.t_long);
+		break;
+	case TAG_Float:
+		printf("%f\n", node->data.t_float);
+		break;
+	case TAG_Double:
+		printf("%f\n", node->data.t_double);
+		break;
+	case TAG_String:
+		printf("'%s'\n", node->data.string);
+		break;
+	case TAG_Byte_Array:
+	case TAG_Int_Array:
+	case TAG_Long_Array:
+		print_array(node->data.array, indent);
+		break;
+	case TAG_List:
+		printf("%d %s entries\n", list_len(node->data.list->head),
+		       tag_names[node->data.list->type]);
+		break;
+	default:
+		printf("idk how to handle this\n");
+		break;
 	}
 }
 
@@ -81,7 +86,8 @@ void print_tree_rec(struct nbt *root, int indent)
 {
 	put_indent(indent);
 	struct list *children = root->data.children;
-	printf("%s('%s'): %d entries\n", tag_names[root->tag], root->name, list_len(root->data.children));
+	printf("%s('%s'): %d entries\n", tag_names[root->tag], root->name,
+	       list_len(root->data.children));
 	put_indent(indent);
 	printf("{\n");
 
@@ -155,7 +161,6 @@ int main(int argc, char **argv)
 	if (f == NULL) {
 		perror("nbtv: fopen: ");
 		exit(EXIT_FAILURE);
-			
 	}
 	fseek(f, 0, SEEK_END);
 	size_t f_len = ftell(f);
@@ -179,7 +184,8 @@ int main(int argc, char **argv)
 		}
 		struct nbt *node = nbt_find(root, t, argv[4]);
 		if (node == NULL) {
-			fprintf(stderr, "nbtv: couldn't find tag '%s'\n", argv[4]);
+			fprintf(stderr, "nbtv: couldn't find tag '%s'\n",
+				argv[4]);
 			exit(EXIT_FAILURE);
 		}
 		write_tree(node, save_filename);

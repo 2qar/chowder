@@ -4,8 +4,9 @@
 #ifndef CHOWDER_NBT_H
 #define CHOWDER_NBT_H
 
-#include <stdint.h>
 #include "list.h"
+
+#include <stdint.h>
 
 enum tag {
 	TAG_End,

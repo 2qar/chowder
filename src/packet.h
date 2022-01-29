@@ -1,15 +1,15 @@
 #ifndef CHOWDER_PACKET
 #define CHOWDER_PACKET
 
-#include <unistd.h>
-#include <stdint.h>
-#include <stdbool.h>
-
 #include "nbt.h"
 #include "slot.h"
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <unistd.h>
+
 #define PACKET_VARINT_TOO_LONG -2
-#define PACKET_TOO_BIG         -3
+#define PACKET_TOO_BIG	       -3
 #define PACKET_REALLOC_FAILED  -4
 #define PACKET_STRING_TOO_LONG -5
 

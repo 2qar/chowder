@@ -1,32 +1,37 @@
 #include "packet.h"
+
+#include <arpa/inet.h>
 #include <assert.h>
+#include <endian.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <endian.h>
 
 #define FINISHED_PACKET_ID 255
 
-void packet_init(struct packet *p) {
+void packet_init(struct packet *p)
+{
 	memset(p, 0, sizeof(struct packet));
 	p->data_len = PACKET_BLOCK_SIZE;
 	p->data = malloc(PACKET_BLOCK_SIZE);
 }
 
-void packet_free(struct packet *p) {
+void packet_free(struct packet *p)
+{
 	free(p->data);
 	free(p);
 }
 
-bool packet_buf_read_byte(void *p, uint8_t *b) {
+bool packet_buf_read_byte(void *p, uint8_t *b)
+{
 	return packet_read_byte((struct packet *) p, b);
 }
 
-bool sfd_read_byte(void *sfd, uint8_t *b) {
+bool sfd_read_byte(void *sfd, uint8_t *b)
+{
 	int n = read(*((int *) sfd), b, 1);
 	if (n <= 0) {
 		*b = n;
@@ -35,7 +40,8 @@ bool sfd_read_byte(void *sfd, uint8_t *b) {
 	return true;
 }
 
-int read_varint_gen(read_byte_func rb, void *src, int *v) {
+int read_varint_gen(read_byte_func rb, void *src, int *v)
+{
 	int n = 0;
 	*v = 0;
 	uint8_t b = 0;
@@ -50,11 +56,13 @@ int read_varint_gen(read_byte_func rb, void *src, int *v) {
 	return n;
 }
 
-int read_varint_sfd(int sfd, int *v) {
-	return read_varint_gen(sfd_read_byte, (void *)(&sfd), v);
+int read_varint_sfd(int sfd, int *v)
+{
+	return read_varint_gen(sfd_read_byte, (void *) (&sfd), v);
 }
 
-int packet_read_header(struct packet *p, int sfd) {
+int packet_read_header(struct packet *p, int sfd)
+{
 	p->packet_mode = PACKET_MODE_READ;
 
 	int n = read_varint_sfd(sfd, &(p->packet_len));
@@ -90,7 +98,8 @@ int packet_read_header(struct packet *p, int sfd) {
 	return n;
 }
 
-bool packet_read_byte(struct packet *p, uint8_t *b) {
+bool packet_read_byte(struct packet *p, uint8_t *b)
+{
 	assert(p->packet_mode == PACKET_MODE_READ);
 
 	if (p->index >= MAX_PACKET_LEN || p->index >= p->packet_len) {
@@ -102,7 +111,8 @@ bool packet_read_byte(struct packet *p, uint8_t *b) {
 	return true;
 }
 
-bool packet_read_bytes(struct packet *p, size_t buf_len, uint8_t *buf) {
+bool packet_read_bytes(struct packet *p, size_t buf_len, uint8_t *buf)
+{
 	bool in_bounds = true;
 
 	size_t i = 0;
@@ -116,24 +126,28 @@ bool packet_read_bytes(struct packet *p, size_t buf_len, uint8_t *buf) {
 	return in_bounds;
 }
 
-bool packet_read_int(struct packet *p, int32_t *v) {
+bool packet_read_int(struct packet *p, int32_t *v)
+{
 	int32_t val;
 	bool in_bounds = packet_read_bytes(p, 4, (uint8_t *) &val);
 	*v = ntohl(val);
 	return in_bounds;
 }
 
-int packet_read_varint(struct packet *p, int *v) {
+int packet_read_varint(struct packet *p, int *v)
+{
 	return read_varint_gen(&packet_buf_read_byte, (void *) p, v);
 }
 
-int packet_read_string(struct packet *p, int buf_len, char *buf) {
+int packet_read_string(struct packet *p, int buf_len, char *buf)
+{
 	int len;
 	if (packet_read_varint(p, &len) < 0)
 		return len;
 
 	int i = 0;
-	while (i < buf_len - 1 && i < len && packet_read_byte(p, (uint8_t *) &(buf[i])))
+	while (i < buf_len - 1 && i < len
+	       && packet_read_byte(p, (uint8_t *) &(buf[i])))
 		++i;
 
 	if (i != len)
@@ -143,7 +157,8 @@ int packet_read_string(struct packet *p, int buf_len, char *buf) {
 	return i;
 }
 
-bool packet_read_short(struct packet *p, uint16_t *s) {
+bool packet_read_short(struct packet *p, uint16_t *s)
+{
 	uint8_t b;
 	if (!packet_read_byte(p, &b))
 		return false;
@@ -154,15 +169,18 @@ bool packet_read_short(struct packet *p, uint16_t *s) {
 	return true;
 }
 
-bool packet_read_float(struct packet *p, float *f) {
+bool packet_read_float(struct packet *p, float *f)
+{
 	return packet_read_int(p, (int32_t *) f);
 }
 
-bool packet_read_double(struct packet *p, double *d) {
+bool packet_read_double(struct packet *p, double *d)
+{
 	return packet_read_long(p, (uint64_t *) d);
 }
 
-bool packet_read_long(struct packet *p, uint64_t *l) {
+bool packet_read_long(struct packet *p, uint64_t *l)
+{
 	uint64_t hl = 0;
 	int i = 7;
 	uint8_t b;
@@ -177,21 +195,24 @@ bool packet_read_long(struct packet *p, uint64_t *l) {
 	return true;
 }
 
-bool packet_read_nbt(struct packet *p, struct nbt **nbt) {
+bool packet_read_nbt(struct packet *p, struct nbt **nbt)
+{
 	// FIXME: better errors from this function, but first that requires
 	//        proper errors from the functions in nbt.h
-	size_t nbt_len = nbt_unpack(p->packet_len - p->index, p->data + p->index, nbt);
+	size_t nbt_len =
+	    nbt_unpack(p->packet_len - p->index, p->data + p->index, nbt);
 	p->index += nbt_len;
 	return nbt_len != 0;
 }
 
-bool packet_read_slot(struct packet *p, struct slot *s) {
+bool packet_read_slot(struct packet *p, struct slot *s)
+{
 	if (!packet_read_byte(p, (uint8_t *) &s->present)) {
 		return false;
 	} else if (s->present) {
 		return packet_read_varint(p, &s->item_id)
-			&& packet_read_byte(p, (uint8_t *) &s->item_count)
-			&& packet_read_nbt(p, &s->nbt);
+		       && packet_read_byte(p, (uint8_t *) &s->item_count)
+		       && packet_read_nbt(p, &s->nbt);
 	} else {
 		return true;
 	}
@@ -199,7 +220,8 @@ bool packet_read_slot(struct packet *p, struct slot *s) {
 
 /* TODO: test w/ negative values if i ever get around to sending chunks w/
  *       negative coordinates xd */
-bool packet_read_position(struct packet *p, int32_t *x, int16_t *y, int32_t *z) {
+bool packet_read_position(struct packet *p, int32_t *x, int16_t *y, int32_t *z)
+{
 	uint64_t l;
 	if (!packet_read_long(p, &l))
 		return false;
@@ -210,7 +232,8 @@ bool packet_read_position(struct packet *p, int32_t *x, int16_t *y, int32_t *z) 
 	return true;
 }
 
-void make_packet(struct packet *p, int id) {
+void make_packet(struct packet *p, int id)
+{
 	p->packet_mode = PACKET_MODE_WRITE;
 	p->packet_len = 0;
 	p->index = 0;
@@ -219,7 +242,8 @@ void make_packet(struct packet *p, int id) {
 }
 
 /* insert packet ID + length at the start of the packet's data buffer. */
-struct packet *finalize_packet(struct packet *p) {
+struct packet *finalize_packet(struct packet *p)
+{
 	if (p->packet_id == FINISHED_PACKET_ID)
 		return p;
 
@@ -242,26 +266,30 @@ struct packet *finalize_packet(struct packet *p) {
 	return p;
 }
 
-ssize_t write_packet_data(int sfd, const uint8_t data[], size_t len) {
+ssize_t write_packet_data(int sfd, const uint8_t data[], size_t len)
+{
 	ssize_t n;
 	/* FIXME: handle closed sockets */
 	if ((n = write(sfd, data, len)) < 0) {
 		perror("write");
 		return -1;
-	} else if ((size_t)n != len) {
-		fprintf(stderr, "whole packet not written: %ld != %ld\n", n, len);
+	} else if ((size_t) n != len) {
+		fprintf(stderr, "whole packet not written: %ld != %ld\n", n,
+			len);
 		return -1;
 	}
 	return n;
 }
 
-ssize_t write_packet(int sfd, const struct packet *p) {
+ssize_t write_packet(int sfd, const struct packet *p)
+{
 	if (p == NULL)
 		return -1;
 	return write_packet_data(sfd, p->data, p->packet_len);
 }
 
-static int packet_try_resize(struct packet *p, size_t new_size) {
+static int packet_try_resize(struct packet *p, size_t new_size)
+{
 	if (new_size > MAX_PACKET_LEN) {
 		return PACKET_TOO_BIG;
 	} else if (new_size > p->data_len) {
@@ -279,7 +307,8 @@ static int packet_try_resize(struct packet *p, size_t new_size) {
 	return 0;
 }
 
-int packet_write_byte(struct packet *p, uint8_t b) {
+int packet_write_byte(struct packet *p, uint8_t b)
+{
 	assert(p->packet_mode == PACKET_MODE_WRITE);
 
 	int err = packet_try_resize(p, p->packet_len + 1);
@@ -292,7 +321,8 @@ int packet_write_byte(struct packet *p, uint8_t b) {
 }
 
 /* writes bytes without changing the byte order of the data */
-int packet_write_bytes(struct packet *p, size_t len, const void *data) {
+int packet_write_bytes(struct packet *p, size_t len, const void *data)
+{
 	assert(p->packet_mode == PACKET_MODE_WRITE);
 
 	int err = packet_try_resize(p, p->packet_len + len);
@@ -305,12 +335,14 @@ int packet_write_bytes(struct packet *p, size_t len, const void *data) {
 	return len;
 }
 
-int packet_write_short(struct packet *p, int16_t s) {
+int packet_write_short(struct packet *p, int16_t s)
+{
 	uint16_t ns = htons(s);
 	return packet_write_bytes(p, sizeof(uint16_t), &ns);
 }
 
-int packet_write_varint(struct packet *p, int i) {
+int packet_write_varint(struct packet *p, int i)
+{
 	uint8_t temp;
 	int n = 0;
 	do {
@@ -325,7 +357,8 @@ int packet_write_varint(struct packet *p, int i) {
 	return n;
 }
 
-int packet_write_string(struct packet *p, int len, const char s[]) {
+int packet_write_string(struct packet *p, int len, const char s[])
+{
 	int len_bytes = packet_write_varint(p, len);
 	if (len_bytes < 0)
 		return len_bytes;
@@ -344,29 +377,34 @@ int packet_write_string(struct packet *p, int len, const char s[]) {
 	}
 }
 
-int packet_write_int(struct packet *p, int32_t i) {
+int packet_write_int(struct packet *p, int32_t i)
+{
 	uint32_t ni = htonl(i);
 	return packet_write_bytes(p, sizeof(uint32_t), &ni);
 }
 
-int packet_write_float(struct packet *p, float f) {
+int packet_write_float(struct packet *p, float f)
+{
 	int32_t i;
 	memcpy(&i, &f, sizeof(float));
 	return packet_write_int(p, i);
 }
 
-int packet_write_double(struct packet *p, double d) {
+int packet_write_double(struct packet *p, double d)
+{
 	int64_t i;
 	memcpy(&i, &d, sizeof(double));
 	return packet_write_long(p, i);
 }
 
-int packet_write_long(struct packet *p, uint64_t l) {
+int packet_write_long(struct packet *p, uint64_t l)
+{
 	uint64_t nl = htobe64(l);
 	return packet_write_bytes(p, sizeof(uint64_t), &nl);
 }
 
-int packet_write_nbt(struct packet *p, struct nbt *nbt) {
+int packet_write_nbt(struct packet *p, struct nbt *nbt)
+{
 	uint8_t *nbt_data;
 	size_t nbt_len = nbt_pack(nbt, &nbt_data);
 	int n = packet_write_bytes(p, nbt_len, nbt_data);
@@ -374,7 +412,8 @@ int packet_write_nbt(struct packet *p, struct nbt *nbt) {
 	return n;
 }
 
-int packet_write_slot(struct packet *p, struct slot *s) {
+int packet_write_slot(struct packet *p, struct slot *s)
+{
 	int total = 0;
 	int n = packet_write_byte(p, s->present);
 	if (n < 0)

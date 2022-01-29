@@ -1,4 +1,5 @@
-/* a hashmap, with strings as keys and pointers to dynamically allocated objects as values */
+/* a hashmap, with strings as keys and pointers to dynamically allocated objects
+ * as values */
 #include <stdbool.h>
 #include <stddef.h>
 

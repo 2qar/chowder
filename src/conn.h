@@ -1,14 +1,14 @@
 #ifndef CHOWDER_CONN
 #define CHOWDER_CONN
 
+#include "message.h"
+#include "packet.h"
+#include "player.h"
+
 #include <stdint.h>
 #include <time.h>
 
 #include <openssl/evp.h>
-
-#include "packet.h"
-#include "player.h"
-#include "message.h"
 
 struct conn {
 	int sfd;

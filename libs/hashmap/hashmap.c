@@ -20,15 +20,17 @@ struct hashmap {
 	struct hashmap_entry *entries;
 };
 
-struct hashmap *hashmap_new(size_t elems) {
+struct hashmap *hashmap_new(size_t elems)
+{
 	struct hashmap *hm = malloc(sizeof(struct hashmap));
 	hm->occupied = 0;
-	hm->entries_len = elems + elems * (1-HASHMAP_LOAD_FACTOR);
+	hm->entries_len = elems + elems * (1 - HASHMAP_LOAD_FACTOR);
 	hm->entries = calloc(hm->entries_len, sizeof(struct hashmap_entry));
 	return hm;
 }
 
-void hashmap_free(struct hashmap *hm, bool free_keys, free_item_func free_item) {
+void hashmap_free(struct hashmap *hm, bool free_keys, free_item_func free_item)
+{
 	for (size_t i = 0; i < hm->entries_len; ++i) {
 		if (hm->entries[i].key != NULL) {
 			if (free_keys) {
@@ -41,8 +43,10 @@ void hashmap_free(struct hashmap *hm, bool free_keys, free_item_func free_item) 
 	free(hm);
 }
 
-/* https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash */
-static uint64_t fnv1a(char *key) {
+/* https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
+ */
+static uint64_t fnv1a(char *key)
+{
 	uint64_t hash = 0xcbf29ce484222325;
 	while (*key != '\0') {
 		hash ^= *key;
@@ -52,7 +56,8 @@ static uint64_t fnv1a(char *key) {
 	return hash;
 }
 
-static void hashmap_resize(struct hashmap *hm) {
+static void hashmap_resize(struct hashmap *hm)
+{
 	size_t old_entries_len = hm->entries_len;
 	// FIXME: there's gotta be a better way than allocating another buffer
 	struct hashmap_entry *old_entries = hm->entries;
@@ -61,17 +66,20 @@ static void hashmap_resize(struct hashmap *hm) {
 	hm->entries = calloc(hm->entries_len, sizeof(struct hashmap_entry));
 	for (size_t i = 0; i < old_entries_len; ++i) {
 		if (old_entries[i].key != NULL) {
-			hashmap_add(hm, old_entries[i].key, old_entries[i].value);
+			hashmap_add(hm, old_entries[i].key,
+				    old_entries[i].value);
 		}
 	}
 	free(old_entries);
 }
 
-static size_t hashmap_index(struct hashmap *hm, char *key) {
+static size_t hashmap_index(struct hashmap *hm, char *key)
+{
 	return fnv1a(key) % hm->entries_len;
 }
 
-void hashmap_add(struct hashmap *hm, char *key, void *value) {
+void hashmap_add(struct hashmap *hm, char *key, void *value)
+{
 	if (hm->occupied >= hm->entries_len * HASHMAP_LOAD_FACTOR) {
 		hashmap_resize(hm);
 	}
@@ -98,13 +106,14 @@ void hashmap_add(struct hashmap *hm, char *key, void *value) {
 	++(hm->occupied);
 }
 
-static size_t hashmap_get_index(struct hashmap *hm, char *key) {
+static size_t hashmap_get_index(struct hashmap *hm, char *key)
+{
 	bool looped = false;
 	size_t i = hashmap_index(hm, key);
 	size_t j = i;
 	struct hashmap_entry *e = &(hm->entries[j]);
-	while (j < hm->entries_len && (e->removed
-				|| (e->key != NULL && strcmp(e->key, key)))) {
+	while (j < hm->entries_len
+	       && (e->removed || (e->key != NULL && strcmp(e->key, key)))) {
 		++j;
 		e = &(hm->entries[j]);
 	}
@@ -112,8 +121,9 @@ static size_t hashmap_get_index(struct hashmap *hm, char *key) {
 		looped = true;
 		j = 0;
 		e = &(hm->entries[j]);
-		while (j < i && (e->removed
-					|| (e->key != NULL && strcmp(e->key, key)))) {
+		while (j < i
+		       && (e->removed
+			   || (e->key != NULL && strcmp(e->key, key)))) {
 			++j;
 			e = &(hm->entries[j]);
 		}
@@ -125,7 +135,8 @@ static size_t hashmap_get_index(struct hashmap *hm, char *key) {
 	}
 }
 
-void *hashmap_get(struct hashmap *hm, char *key) {
+void *hashmap_get(struct hashmap *hm, char *key)
+{
 	size_t i = hashmap_get_index(hm, key);
 	if (i == hm->entries_len) {
 		return NULL;
@@ -134,7 +145,8 @@ void *hashmap_get(struct hashmap *hm, char *key) {
 	}
 }
 
-void *hashmap_remove(struct hashmap *hm, char *key) {
+void *hashmap_remove(struct hashmap *hm, char *key)
+{
 	size_t i = hashmap_get_index(hm, key);
 	if (i != hm->entries_len) {
 		hm->entries[i].removed = true;

@@ -1,12 +1,12 @@
 #ifndef CHOWDER_LOGIN_H
 #define CHOWDER_LOGIN_H
 
+#include "conn.h"
+#include "packet.h"
+
 #include <stdint.h>
 
 #include <openssl/evp.h>
-
-#include "conn.h"
-#include "packet.h"
 
 struct login_ctx {
 	EVP_PKEY_CTX *decrypt_ctx;

@@ -1,4 +1,5 @@
 #include "json.h"
+
 #include <ctype.h>
 #include <math.h>
 #include <stdbool.h>
@@ -21,10 +22,7 @@ struct json_value *json_new()
 
 static bool is_whitespace(char c)
 {
-	return c == ' '
-		|| c == '\n'
-		|| c == '\r'
-		|| c == '\t';
+	return c == ' ' || c == '\n' || c == '\r' || c == '\t';
 }
 
 static size_t skip_whitespace(const char *s, size_t start)
@@ -38,34 +36,22 @@ static size_t skip_whitespace(const char *s, size_t start)
 
 static bool is_valid_escape(char c)
 {
-	return c == '"'
-		|| c == '\\'
-		|| c == '/'
-		|| c == 'b'
-		|| c == 'f'
-		|| c == 'n'
-		|| c == 'r'
-		|| c == 't';
-		// FIXME: handle unicode 'u'
+	return c == '"' || c == '\\' || c == '/' || c == 'b' || c == 'f'
+	       || c == 'n' || c == 'r' || c == 't';
+	// FIXME: handle unicode 'u'
 }
 
 static char escape(char c)
 {
 	static char escaped[] = {
-		['"'] = '"',
-		['\\'] = '\\',
-		['/'] = '/',
-		['b'] = '\b',
-		['f'] = '\f',
-		['n'] = '\n',
-		['r'] = '\r',
-		['t'] = '\t'
+		['"'] = '"',  ['\\'] = '\\', ['/'] = '/',  ['b'] = '\b',
+		['f'] = '\f', ['n'] = '\n',  ['r'] = '\r', ['t'] = '\t'
 	};
 	return escaped[(size_t) c];
 }
 
-static size_t parse_string(char *s, size_t open_quote, struct json_err_ctx *error,
-		char **out)
+static size_t parse_string(char *s, size_t open_quote,
+			   struct json_err_ctx *error, char **out)
 {
 	size_t i = open_quote + 1;
 	size_t string_idx = i;
@@ -99,10 +85,11 @@ static size_t parse_string(char *s, size_t open_quote, struct json_err_ctx *erro
 	}
 }
 
-static size_t parse_value(char *, size_t, struct json_err_ctx *, struct json_value *value);
+static size_t parse_value(char *, size_t, struct json_err_ctx *,
+			  struct json_value *value);
 
-static size_t parse_member(char *s, size_t open_quote, struct json_err_ctx *error,
-		struct json *json)
+static size_t parse_member(char *s, size_t open_quote,
+			   struct json_err_ctx *error, struct json *json)
 {
 	if (s[open_quote] != '"') {
 		error->type = JSON_EXPECTED_VALUE;
@@ -137,8 +124,9 @@ static size_t parse_member(char *s, size_t open_quote, struct json_err_ctx *erro
 	return value_end;
 }
 
-static size_t skip_to_next_value(const char *s, size_t value_end, struct json_err_ctx *error,
-		char value_list_terminator)
+static size_t skip_to_next_value(const char *s, size_t value_end,
+				 struct json_err_ctx *error,
+				 char value_list_terminator)
 {
 	size_t i = skip_whitespace(s, value_end);
 	if (s[i] == ',') {
@@ -165,8 +153,9 @@ static size_t skip_to_next_value(const char *s, size_t value_end, struct json_er
 	}
 }
 
-static size_t parse_object(char *s, size_t open_brace, struct json_err_ctx *error,
-		struct json_value *json_object)
+static size_t parse_object(char *s, size_t open_brace,
+			   struct json_err_ctx *error,
+			   struct json_value *json_object)
 {
 	json_object->type = JSON_OBJECT;
 	size_t i = open_brace + 1;
@@ -195,8 +184,9 @@ static size_t parse_object(char *s, size_t open_brace, struct json_err_ctx *erro
 	}
 }
 
-static size_t parse_array(char *s, size_t open_bracket, struct json_err_ctx *error,
-		struct json_value *json_array)
+static size_t parse_array(char *s, size_t open_bracket,
+			  struct json_err_ctx *error,
+			  struct json_value *json_array)
 {
 	json_array->type = JSON_ARRAY;
 	struct list *array = list_new();
@@ -228,8 +218,8 @@ static size_t parse_array(char *s, size_t open_bracket, struct json_err_ctx *err
 	}
 }
 
-static bool is_valid_number(const char *s, size_t *idx, struct json_err_ctx *error,
-		enum json_type *type)
+static bool is_valid_number(const char *s, size_t *idx,
+			    struct json_err_ctx *error, enum json_type *type)
 {
 	size_t num_start = *idx;
 	*type = JSON_INTEGER;
@@ -279,8 +269,8 @@ invalid_number:
 	return false;
 }
 
-static size_t parse_number(const char *s, size_t num_start, struct json_err_ctx *error,
-		struct json_value *value)
+static size_t parse_number(const char *s, size_t num_start,
+			   struct json_err_ctx *error, struct json_value *value)
 {
 	size_t num_end = num_start;
 	if (!is_valid_number(s, &num_end, error, &value->type)) {
@@ -295,35 +285,32 @@ static size_t parse_number(const char *s, size_t num_start, struct json_err_ctx 
 
 static bool is_truthy_follow(char c)
 {
-	return is_whitespace(c)
-		|| c == ','
-		|| c == ']'
-		|| c == '}'
-		|| c == '\0';
+	return is_whitespace(c) || c == ',' || c == ']' || c == '}'
+	       || c == '\0';
 }
 
 static size_t parse_truthy(const char *s, size_t i, struct json_err_ctx *error,
-		struct json_value *value)
+			   struct json_value *value)
 {
 	char *truthy_str = NULL;
 	switch (s[i]) {
-		case 't':
-			truthy_str = "true";
-			value->type = JSON_TRUE;
-			break;
-		case 'f':
-			truthy_str = "false";
-			value->type = JSON_FALSE;
-			break;
-		case 'n':
-			truthy_str = "null";
-			value->type = JSON_NULL;
-			break;
+	case 't':
+		truthy_str = "true";
+		value->type = JSON_TRUE;
+		break;
+	case 'f':
+		truthy_str = "false";
+		value->type = JSON_FALSE;
+		break;
+	case 'n':
+		truthy_str = "null";
+		value->type = JSON_NULL;
+		break;
 	}
 
 	size_t truthy_str_len = strlen(truthy_str);
 	if (!strncmp(s + i, truthy_str, truthy_str_len)
-			&& is_truthy_follow(s[i + truthy_str_len])) {
+	    && is_truthy_follow(s[i + truthy_str_len])) {
 		return i + truthy_str_len;
 	} else {
 		error->type = JSON_EXPECTED_TRUTHY;
@@ -333,7 +320,7 @@ static size_t parse_truthy(const char *s, size_t i, struct json_err_ctx *error,
 }
 
 static size_t parse_value(char *s, size_t i, struct json_err_ctx *error,
-		struct json_value *value)
+			  struct json_value *value)
 {
 	if (isdigit(s[i])) {
 		return parse_number(s, i, error, value);
@@ -369,7 +356,7 @@ static size_t parse_value(char *s, size_t i, struct json_err_ctx *error,
 struct json_err_ctx json_parse(char *json_string, struct json_value **out)
 {
 	struct json_value *root_value = calloc(1, sizeof(struct json_value));
-	struct json_err_ctx error = {0};
+	struct json_err_ctx error = { 0 };
 	size_t json_end = parse_value(json_string, 0, &error, root_value);
 	if (json_end != 0 && json_string[json_end] != '\0') {
 		error.type = JSON_UNEXPECTED_CHAR;
@@ -384,7 +371,8 @@ struct json_err_ctx json_parse(char *json_string, struct json_value **out)
 	return error;
 }
 
-struct json_err_ctx json_parse_file(FILE *json_file, struct json_value **out, char **out_json_string)
+struct json_err_ctx json_parse_file(FILE *json_file, struct json_value **out,
+				    char **out_json_string)
 {
 	fseek(json_file, 0, SEEK_END);
 	size_t json_string_len = ftell(json_file);
@@ -399,7 +387,8 @@ struct json_err_ctx json_parse_file(FILE *json_file, struct json_value **out, ch
 	}
 }
 
-void json_set(struct json_value *root_object, char *key, struct json_value *value)
+void json_set(struct json_value *root_object, char *key,
+	      struct json_value *value)
 {
 	if (root_object->type != JSON_OBJECT) {
 		// FIXME: this should probably return an error or something
@@ -442,7 +431,8 @@ static void compare_json_value(char *name, void *val, void *data)
 	if (ctx->equal) {
 		struct json_value *value = val;
 		struct json_value *other_value = json_get(ctx->other, name);
-		ctx->equal = other_value != NULL && json_equal(value, other_value);
+		ctx->equal =
+		    other_value != NULL && json_equal(value, other_value);
 	}
 }
 
@@ -463,7 +453,7 @@ static bool json_object_equal(struct json_value *j1, struct json_value *j2)
 static bool json_array_equal(struct list *a1, struct list *a2)
 {
 	while (!list_empty(a1) && !list_empty(a2)
-			&& json_equal(list_item(a1), list_item(a2))) {
+	       && json_equal(list_item(a1), list_item(a2))) {
 		a1 = a1->next;
 		a2 = a2->next;
 	}
@@ -497,7 +487,8 @@ bool json_equal(struct json_value *v1, struct json_value *v2)
 	return v1->type == v2->type && json_data_equal(v1, v2);
 }
 
-void json_apply(struct json_value *root_object, hm_apply_func do_func, void *data)
+void json_apply(struct json_value *root_object, hm_apply_func do_func,
+		void *data)
 {
 	if (root_object->type != JSON_OBJECT) {
 		// FIXME: this should probably get angry or something
@@ -510,7 +501,8 @@ void json_free(struct json_value *value)
 {
 	switch (value->type) {
 	case JSON_OBJECT:
-		hashmap_free(value->object->values, false, (free_item_func) json_free);
+		hashmap_free(value->object->values, false,
+			     (free_item_func) json_free);
 		free(value->object);
 		break;
 	case JSON_ARRAY:;

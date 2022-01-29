@@ -1,8 +1,10 @@
 #include "section.h"
+
 #include <math.h>
 #include <stdlib.h>
 
-uint8_t bitmask(int size) {
+uint8_t bitmask(int size)
+{
 	/* probably not necessary xd */
 	if (size > 8)
 		return 0xff;
@@ -17,7 +19,8 @@ struct block_pos {
 	int end_long;
 };
 
-struct block_pos block_pos(const struct section *s, int x, int y, int z) {
+struct block_pos block_pos(const struct section *s, int x, int y, int z)
+{
 	x %= 16;
 	y %= 16;
 	z %= 16;
@@ -39,7 +42,8 @@ struct block_pos block_pos(const struct section *s, int x, int y, int z) {
 /* Based on the deserialization implementation by #mcdevs
  * https://wiki.vg/Chunk_Format#Deserializing
  */
-int read_blockstate_at(const struct section *s, int x, int y, int z) {
+int read_blockstate_at(const struct section *s, int x, int y, int z)
+{
 	struct block_pos p = block_pos(s, x, y, z);
 	int palette_index = s->blockstates[p.start_long] >> p.offset;
 	if (p.start_long != p.end_long) {
@@ -49,7 +53,8 @@ int read_blockstate_at(const struct section *s, int x, int y, int z) {
 	return palette_index & p.mask;
 }
 
-void write_blockstate_at(struct section *s, int x, int y, int z, int value) {
+void write_blockstate_at(struct section *s, int x, int y, int z, int value)
+{
 	struct block_pos p = block_pos(s, x, y, z);
 	uint64_t v = value & p.mask;
 	s->blockstates[p.start_long] |= (v << p.offset);
@@ -59,7 +64,8 @@ void write_blockstate_at(struct section *s, int x, int y, int z, int value) {
 	}
 }
 
-void free_section(struct section *s) {
+void free_section(struct section *s)
+{
 	free(s->palette);
 	free(s->blockstates);
 	free(s);

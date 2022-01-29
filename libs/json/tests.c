@@ -1,9 +1,10 @@
 #include "json.h"
 #include "list.h"
+
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 
 void put_spaces(size_t n, FILE *stream)
 {
@@ -45,12 +46,12 @@ void print_error_ctx(const char *json_str, struct json_err_ctx *error)
 	put_spaces(error->index - bad_line_start + prefix_len, stderr);
 	fprintf(stderr, "| ");
 	switch (error->type) {
-		case JSON_UNEXPECTED_CHAR:
-			fprintf(stderr, "expected a '%c'\n", error->expected);
-			break;
-		default:
-			fprintf(stderr, "this is bad i guess\n");
-			break;
+	case JSON_UNEXPECTED_CHAR:
+		fprintf(stderr, "expected a '%c'\n", error->expected);
+		break;
+	default:
+		fprintf(stderr, "this is bad i guess\n");
+		break;
 	}
 }
 
@@ -128,7 +129,8 @@ static struct json_value *json_null()
 	return json_value(JSON_NULL);
 }
 
-static void json_expect_error(const char *json_str, struct json_err_ctx expected_error)
+static void json_expect_error(const char *json_str,
+			      struct json_err_ctx expected_error)
 {
 	char *buf = strdup(json_str);
 	struct json_err_ctx error = json_parse(buf, NULL);
@@ -162,7 +164,8 @@ static struct json_err_ctx json_unexpected_char(size_t index, char expected)
 void test_simple()
 {
 	struct json_value *root;
-	char json_str[] = "{ \"thomas\": \r\n\t-1234, \"ogdog\": null, \"atcat\": 12e-2, \"obj\": { \"ogdog\": 1 } }";
+	char json_str[] = "{ \"thomas\": \r\n\t-1234, \"ogdog\": null, "
+			  "\"atcat\": 12e-2, \"obj\": { \"ogdog\": 1 } }";
 	struct json_err_ctx error = json_parse(json_str, &root);
 	if (error.type != JSON_OK) {
 		print_error_ctx(json_str, &error);
@@ -170,14 +173,14 @@ void test_simple()
 	} else {
 		struct member obj_members[] = {
 			{ "ogdog", json_integer(1) },
-			{0},
+			{ 0 },
 		};
 		struct member members[] = {
 			{ "thomas", json_integer(-1234) },
 			{ "ogdog", json_null() },
 			{ "atcat", json_fraction(0.12) },
 			{ "obj", json_object(obj_members) },
-			{0},
+			{ 0 },
 		};
 		struct json_value *expected = json_object(members);
 		assert(json_equal(root, expected));
@@ -191,13 +194,15 @@ void test_huge()
 	FILE *json_file = fopen("../../gamedata/blocks.json", "r");
 	struct json_value *root;
 	char *json_str;
-	struct json_err_ctx error = json_parse_file(json_file, &root, &json_str);
+	struct json_err_ctx error =
+	    json_parse_file(json_file, &root, &json_str);
 	if (error.type != JSON_OK) {
 		print_error_ctx(json_str, &error);
 		exit(EXIT_FAILURE);
 	} else {
 		assert(json_members(root) == 680);
-		struct json_value *andesite = json_get(root, "minecraft:andesite");
+		struct json_value *andesite =
+		    json_get(root, "minecraft:andesite");
 		assert(andesite != NULL);
 		assert(andesite->type == JSON_OBJECT);
 		struct json_value *states = json_get(andesite, "states");
@@ -220,7 +225,6 @@ void test_huge()
 	}
 }
 
-
 int main()
 {
 	json_expect_error("", json_error(JSON_EXPECTED_VALUE, 0));
@@ -241,15 +245,17 @@ int main()
 	json_expect_equal("null", json_null());
 	json_expect_error("nullp", json_error(JSON_EXPECTED_TRUTHY, 0));
 	json_expect_error("\"e\": 1", json_unexpected_char(3, '\0'));
-	// FIXME: maybe this should point to the character after the closing quote?
-	//        the current behavior of pointing to the first non-whitespace char
-	//        is kinda confusing
+	// FIXME: maybe this should point to the character after the closing
+	// quote?
+	//        the current behavior of pointing to the first non-whitespace
+	//        char is kinda confusing
 	json_expect_error("{ \"e\" 1 }", json_unexpected_char(6, ':'));
 	json_expect_error("{ \"e\":  }", json_error(JSON_EXPECTED_VALUE, 8));
 	json_expect_error("{ \"e\": 1 ", json_error(JSON_UNEXPECTED_EOF, 9));
 	json_expect_error("{ \"e\": 1, ", json_error(JSON_UNEXPECTED_EOF, 10));
 	json_expect_error("{ \"e\": 1, }", json_error(JSON_TRAILING_COMMA, 8));
-	json_expect_error("{ \"e\": 1 \"a\": 4 }", json_unexpected_char(9, ','));
+	json_expect_error("{ \"e\": 1 \"a\": 4 }",
+			  json_unexpected_char(9, ','));
 	json_expect_error("[ 1 2 ]", json_unexpected_char(4, ','));
 	json_expect_error("[ 1, 2 ", json_error(JSON_UNEXPECTED_EOF, 7));
 	json_expect_error("[ 1, 2, ]", json_error(JSON_TRAILING_COMMA, 6));

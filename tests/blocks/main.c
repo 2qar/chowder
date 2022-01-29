@@ -1,12 +1,14 @@
+#include "blocks.h"
+
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "blocks.h"
 
 int main()
 {
-	struct hashmap *blocks = create_block_table("../../gamedata/blocks.json");
+	struct hashmap *blocks =
+	    create_block_table("../../gamedata/blocks.json");
 	assert(blocks != NULL);
 
 	FILE *states = fopen("states.txt", "r");

@@ -1,10 +1,10 @@
 #ifndef CHOWDER_LIST_H
 #define CHOWDER_LIST_H
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 
 struct list {
 	void *data;
@@ -23,7 +23,8 @@ void *list_remove(struct list *);
 bool list_empty(struct list *);
 void *list_item(struct list *);
 struct list *list_next(struct list *);
-struct list *list_find(struct list *, bool (*equal)(void *, void *), void *item);
+struct list *list_find(struct list *, bool (*equal)(void *, void *),
+		       void *item);
 int list_len(struct list *);
 void list_free(struct list *);
 
