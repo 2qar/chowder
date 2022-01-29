@@ -14,6 +14,7 @@
 #include "blocks.h"
 #include "hashmap.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,7 @@ void usage();
 int is_region_file(const char *filename);
 struct pos *parse_chunk_pos(const char *in);
 struct world_pos *parse_world_pos(const char *in);
+int dump_chunk_nbt(const char *filename, int x, int z);
 struct chunk *chunk_at(const char *filename, struct hashmap *block_table, int x,
 		       int z);
 
@@ -53,11 +55,15 @@ void print_block_at(struct chunk *, struct world_pos *);
 int main(int argc, char **argv)
 {
 	bool pretty_print = true;
+	bool nbt_only = false;
 	char optchar;
-	while ((optchar = getopt(argc, argv, "hR")) != -1) {
+	while ((optchar = getopt(argc, argv, "hRn")) != -1) {
 		switch (optchar) {
 		case 'R':
 			pretty_print = false;
+			break;
+		case 'n':
+			nbt_only = true;
 			break;
 		case 'h':
 			usage();
@@ -98,22 +104,35 @@ int main(int argc, char **argv)
 		}
 	}
 
+	struct chunk *c;
+	int chunk_x;
+	int chunk_z;
+	if (world_coords) {
+		struct world_pos *w = p;
+		chunk_x = w->x / 16;
+		chunk_z = w->z / 16;
+	} else {
+		struct pos *pos = p;
+		chunk_x = pos->x;
+		chunk_z = pos->z;
+	}
+	if (nbt_only) {
+		free(p);
+		if (dump_chunk_nbt(argv[region_file_index], chunk_x, chunk_z)
+		    < 0) {
+			exit(EXIT_FAILURE);
+		} else {
+			exit(EXIT_SUCCESS);
+		}
+	}
+
 	struct hashmap *block_table = create_block_table(BLOCKS_JSON_PATH);
 	if (block_table == NULL) {
 		fprintf(stderr, "cv: error creating block table\n");
 		exit(EXIT_FAILURE);
 	}
-	struct chunk *c;
-	if (world_coords) {
-		struct world_pos *w = p;
-		int x = w->x / 16;
-		int z = w->z / 16;
-		c = chunk_at(argv[region_file_index], block_table, x, z);
-	} else {
-		struct pos *pos = p;
-		c = chunk_at(argv[region_file_index], block_table, pos->x,
-			     pos->z);
-	}
+
+	c = chunk_at(argv[region_file_index], block_table, chunk_x, chunk_z);
 	if (c == NULL) {
 		exit(EXIT_FAILURE);
 	}
@@ -164,6 +183,8 @@ void usage()
 	    "integers (https://wiki.vg/Chunk_Format#Compacted_data_array)\n"
 	    "      when printing a chunk, the following additional info is "
 	    "printed:\n"
+	    "  -n: dump the chunk's NBT to stdout, unless stdout prints to a "
+	    "terminal because that would be messy. Pipe it into nbtv.\n"
 	    "        number of sections\n"
 	    "        sections, formatted like above\n"
 	    "        biomes; 1024 line-seperated ints\n"
@@ -197,6 +218,40 @@ struct world_pos *parse_world_pos(const char *in)
 		p = NULL;
 	}
 	return p;
+}
+
+int dump_chunk_nbt(const char *filename, int x, int z)
+{
+	if (isatty(1)) {
+		fprintf(stderr, "cv: stdout is a terminal, not dumping nbt\n");
+		return -1;
+	}
+
+	FILE *f = fopen(filename, "r");
+	if (f == NULL) {
+		fprintf(stderr, "cv: error opening \"%s\": %s\n", filename,
+			strerror(errno));
+		return -1;
+	}
+	size_t chunk_buf_len = 0;
+	Bytef *chunk_buf = NULL;
+	size_t out_len;
+	enum anvil_err err =
+	    anvil_read_chunk(f, x, z, &chunk_buf_len, &chunk_buf, &out_len);
+	fclose(f);
+	if (err != ANVIL_OK) {
+		return -1;
+	}
+	int written = write(1, chunk_buf, out_len);
+	free(chunk_buf);
+	if (written == -1) {
+		perror("write");
+		return -1;
+	} else if ((size_t) written < out_len) {
+		fprintf(stderr, "cv: write interrupted\n");
+		return -1;
+	}
+	return 0;
 }
 
 struct chunk *chunk_at(const char *filename, struct hashmap *block_table, int x,

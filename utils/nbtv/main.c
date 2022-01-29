@@ -2,11 +2,18 @@
 #include "list.h"
 #include "nbt.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#include <zlib.h>
 
 #define INDENT_SPACES 4
+#define READ_BUF_SIZE 1024
 
 const char *tag_names[] = { "TAG_End",	     "TAG_Byte",       "TAG_Short",
 			    "TAG_Int",	     "TAG_Long",       "TAG_Float",
@@ -43,6 +50,27 @@ void print_array(struct nbt_array *a, int indent)
 	}
 }
 
+void print_node_data(struct nbt *, int indent);
+void print_tree_rec(struct nbt *root, int indent);
+
+void print_list(struct nbt_list *nbt_list, int indent)
+{
+	struct list *list = nbt_list->head;
+	int idx = 0;
+	while (!list_empty(list)) {
+		struct nbt *nbt = list_item(list);
+		put_indent(indent + 1);
+		printf("%d: ", idx);
+		if (nbt_list->type == TAG_Compound) {
+			print_tree_rec(nbt, indent + 1);
+		} else {
+			print_node_data(nbt, indent + 1);
+		}
+		list = list_next(list);
+		++idx;
+	}
+}
+
 void print_node_data(struct nbt *node, int indent)
 {
 	switch (node->tag) {
@@ -75,6 +103,7 @@ void print_node_data(struct nbt *node, int indent)
 	case TAG_List:
 		printf("%d %s entries\n", list_len(node->data.list->head),
 		       tag_names[node->data.list->type]);
+		print_list(node->data.list, indent);
 		break;
 	default:
 		printf("idk how to handle this\n");
@@ -82,26 +111,33 @@ void print_node_data(struct nbt *node, int indent)
 	}
 }
 
+void print_node_name(struct nbt *nbt)
+{
+	printf("%s(", tag_names[nbt->tag]);
+	if (nbt->name != NULL) {
+		printf("'%s'", nbt->name);
+	} else {
+		printf("None");
+	}
+	printf("): ");
+}
+
 void print_tree_rec(struct nbt *root, int indent)
 {
-	put_indent(indent);
 	struct list *children = root->data.children;
-	printf("%s('%s'): %d entries\n", tag_names[root->tag], root->name,
-	       list_len(root->data.children));
+	print_node_name(root);
+	printf("%d entries\n", list_len(root->data.children));
 	put_indent(indent);
 	printf("{\n");
 
 	while (!list_empty(children)) {
 		struct nbt *nbt = list_item(children);
 		if (nbt->tag == TAG_Compound) {
+			put_indent(indent + 1);
 			print_tree_rec(nbt, indent + 1);
 		} else {
 			put_indent(indent + 1);
-			char *name = "None";
-			if (nbt->name != NULL) {
-				name = nbt->name;
-			}
-			printf("%s('%s'): ", tag_names[nbt->tag], name);
+			print_node_name(nbt);
 			print_node_data(nbt, indent + 1);
 		}
 		children = list_next(children);
@@ -145,6 +181,54 @@ enum tag tag_name_to_number(char *name)
 	return t;
 }
 
+int read_file(int orig_fd, uint8_t **out, size_t *out_len)
+{
+	int fd = dup(orig_fd);
+	gzFile file = gzdopen(fd, "r");
+	if (file == NULL) {
+		close(fd);
+		fprintf(stderr, "nbtv: gzdopen: %s", strerror(errno));
+		return -1;
+	}
+
+	uint8_t *buf = malloc(READ_BUF_SIZE);
+	if (buf == NULL) {
+		perror("nbtv: error reading file: malloc");
+		return -1;
+	}
+	void *new_buf = buf;
+	unsigned buf_len = READ_BUF_SIZE;
+	unsigned off = 0;
+	int bytes_read;
+	while (new_buf != NULL
+	       && (bytes_read = gzread(file, buf + off, READ_BUF_SIZE))
+		      == READ_BUF_SIZE) {
+		buf_len += READ_BUF_SIZE;
+		void *new_buf = realloc(buf, buf_len);
+		if (new_buf != NULL) {
+			buf = new_buf;
+			off += READ_BUF_SIZE;
+		}
+	}
+	gzclose(file);
+	if (new_buf == NULL) {
+		free(buf);
+		perror("nbtv: failed reading file: realloc");
+		return -1;
+	} else if (bytes_read == -1) {
+		free(buf);
+		int err;
+		const char *err_msg = gzerror(file, &err);
+		fprintf(stderr, "nbtv: error reading file: zlib: %s\n",
+			err_msg);
+		return -1;
+	}
+
+	*out = buf;
+	*out_len = off + bytes_read;
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
@@ -157,21 +241,29 @@ int main(int argc, char **argv)
 		save_filename = argv[2];
 	}
 
-	FILE *f = fopen(argv[1], "r");
-	if (f == NULL) {
-		perror("nbtv: fopen: ");
+	int nbt_fd;
+	if (!strcmp(argv[1], "-")) {
+		nbt_fd = 0;
+	} else {
+		nbt_fd = open(argv[1], O_RDONLY);
+		if (nbt_fd == -1) {
+			fprintf(stderr, "nbtv: failed to open \"%s\": %s\n",
+				argv[1], strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	uint8_t *buf;
+	size_t buf_len;
+	if (read_file(nbt_fd, &buf, &buf_len) < 0) {
 		exit(EXIT_FAILURE);
 	}
-	fseek(f, 0, SEEK_END);
-	size_t f_len = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	uint8_t *buf = malloc(sizeof(uint8_t) * f_len);
-	fread(buf, 1, f_len, f);
-	fclose(f);
+	if (nbt_fd != 0) {
+		close(nbt_fd);
+	}
 
 	struct nbt *root;
-	nbt_unpack(f_len, buf, &root);
+	nbt_unpack(buf_len, buf, &root);
 	free(buf);
 	if (root == NULL) {
 		fprintf(stderr, "nbtv: invalid NBT\n");

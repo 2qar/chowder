@@ -1,6 +1,7 @@
 CC=cc
 CPPFLAGS=$(addprefix -I,$(addsuffix /include,$(lib_paths)))
 CFLAGS=-g -Wall -Wextra -Werror -pedantic
+LDFLAGS=-lz
 TARGET=nbtv
 
 libs=nbt list
@@ -10,4 +11,4 @@ sources=main.c nbt.c list.c
 objects=$(sources:.c=.o)
 
 $(TARGET): $(objects)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
