@@ -275,6 +275,9 @@ struct chunk *chunk_at(const char *filename, struct hashmap *block_table, int x,
 	case ANVIL_BAD_CHUNK:
 		fprintf(stderr, "cv: error parsing chunk\n");
 		break;
+	case ANVIL_BAD_DATA_VERSION:
+		fprintf(stderr, "cv: incompatible data version\n");
+		break;
 	}
 	return c;
 }

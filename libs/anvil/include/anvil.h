@@ -8,6 +8,8 @@
 
 #include <zlib.h>
 
+#define ANVIL_DATA_VERSION 2230
+
 enum anvil_err {
 	ANVIL_OK,
 	ANVIL_CHUNK_MISSING,
@@ -15,6 +17,7 @@ enum anvil_err {
 	ANVIL_ZLIB_ERROR,
 	ANVIL_BAD_NBT,
 	ANVIL_BAD_CHUNK,
+	ANVIL_BAD_DATA_VERSION,
 };
 
 struct anvil_get_chunks_ctx {

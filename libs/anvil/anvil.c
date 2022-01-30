@@ -188,9 +188,14 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table,
 				 struct chunk **out)
 {
 	struct nbt *n;
+	struct nbt *data_version;
 	size_t n_len = nbt_unpack(chunk_data_len, chunk_data, &n);
 	if (n_len == 0) {
 		return ANVIL_BAD_NBT;
+	} else if ((data_version = nbt_get(n, TAG_Int, "DataVersion")) == NULL
+		   || data_version->data.t_int != ANVIL_DATA_VERSION) {
+		nbt_free(n);
+		return ANVIL_BAD_DATA_VERSION;
 	}
 	struct nbt *level = nbt_get(n, TAG_Compound, "Level");
 	assert(level != NULL);
