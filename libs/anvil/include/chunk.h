@@ -7,7 +7,7 @@
 
 struct chunk {
 	int sections_len;
-	struct section *sections[16];
+	struct section *sections[17];
 	int *biomes;
 };
 
