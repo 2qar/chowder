@@ -183,11 +183,11 @@ void usage()
 	    "integers (https://wiki.vg/Chunk_Format#Compacted_data_array)\n"
 	    "      when printing a chunk, the following additional info is "
 	    "printed:\n"
-	    "  -n: dump the chunk's NBT to stdout, unless stdout prints to a "
-	    "terminal because that would be messy. Pipe it into nbtv.\n"
 	    "        number of sections\n"
 	    "        sections, formatted like above\n"
 	    "        biomes; 1024 line-seperated ints\n"
+	    "  -n: dump the chunk's NBT to stdout, unless stdout prints to a "
+	    "terminal because that would be messy. Pipe it into nbtv.\n"
 	    "  -h: print this info and exit\n");
 }
 
