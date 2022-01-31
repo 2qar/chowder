@@ -145,6 +145,8 @@ static size_t nbt_read_string(char **name, size_t len, const uint8_t *data)
 				i += n;
 				(*name)[n] = '\0';
 			}
+		} else {
+			*name = NULL;
 		}
 	}
 	return i;
