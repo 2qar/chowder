@@ -7,7 +7,7 @@ TARGET=nbtv
 libs=nbt list
 lib_paths=$(addprefix ../../libs/,$(libs))
 vpath %.c $(lib_paths)
-sources=main.c nbt.c list.c
+sources=main.c nbt.c nbt_extra.c list.c
 objects=$(sources:.c=.o)
 
 $(TARGET): $(objects)

@@ -1,6 +1,7 @@
 /* nbtv pretty-prints binary NBT blobs. */
 #include "list.h"
 #include "nbt.h"
+#include "nbt_extra.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -13,7 +14,6 @@
 #include <zlib.h>
 
 #define INDENT_SPACES 4
-#define READ_BUF_SIZE 1024
 
 const char *tag_names[] = { "TAG_End",	     "TAG_Byte",       "TAG_Short",
 			    "TAG_Int",	     "TAG_Long",       "TAG_Float",
@@ -181,54 +181,6 @@ enum tag tag_name_to_number(char *name)
 	return t;
 }
 
-int read_file(int orig_fd, uint8_t **out, size_t *out_len)
-{
-	int fd = dup(orig_fd);
-	gzFile file = gzdopen(fd, "r");
-	if (file == NULL) {
-		close(fd);
-		fprintf(stderr, "nbtv: gzdopen: %s", strerror(errno));
-		return -1;
-	}
-
-	uint8_t *buf = malloc(READ_BUF_SIZE);
-	if (buf == NULL) {
-		perror("nbtv: error reading file: malloc");
-		return -1;
-	}
-	void *new_buf = buf;
-	unsigned buf_len = READ_BUF_SIZE;
-	unsigned off = 0;
-	int bytes_read;
-	while (new_buf != NULL
-	       && (bytes_read = gzread(file, buf + off, READ_BUF_SIZE))
-		      == READ_BUF_SIZE) {
-		buf_len += READ_BUF_SIZE;
-		void *new_buf = realloc(buf, buf_len);
-		if (new_buf != NULL) {
-			buf = new_buf;
-			off += READ_BUF_SIZE;
-		}
-	}
-	gzclose(file);
-	if (new_buf == NULL) {
-		free(buf);
-		perror("nbtv: failed reading file: realloc");
-		return -1;
-	} else if (bytes_read == -1) {
-		free(buf);
-		int err;
-		const char *err_msg = gzerror(file, &err);
-		fprintf(stderr, "nbtv: error reading file: zlib: %s\n",
-			err_msg);
-		return -1;
-	}
-
-	*out = buf;
-	*out_len = off + bytes_read;
-	return 0;
-}
-
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
@@ -253,18 +205,16 @@ int main(int argc, char **argv)
 		}
 	}
 
-	uint8_t *buf;
-	size_t buf_len;
-	if (read_file(nbt_fd, &buf, &buf_len) < 0) {
-		exit(EXIT_FAILURE);
-	}
+	struct nbt *root;
+	int err = nbt_unpack_file(nbt_fd, &root);
 	if (nbt_fd != 0) {
 		close(nbt_fd);
 	}
+	if (err != 0) {
+		fprintf(stderr, "nbtv: failed to unpack \"%s\"\n", argv[1]);
+		exit(EXIT_FAILURE);
+	}
 
-	struct nbt *root;
-	nbt_unpack(buf_len, buf, &root);
-	free(buf);
 	if (root == NULL) {
 		fprintf(stderr, "nbtv: invalid NBT\n");
 		exit(EXIT_FAILURE);
