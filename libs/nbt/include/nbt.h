@@ -6,6 +6,7 @@
 
 #include "list.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 enum tag {
@@ -66,6 +67,8 @@ size_t nbt_pack(struct nbt *, uint8_t **b);
 
 /* returns direct children only */
 struct nbt *nbt_get(struct nbt *, enum tag, char *name);
+/* returns true if the value matching tag and name was found */
+bool nbt_get_value(struct nbt *, enum tag, char *name, void *out);
 /* searches the whole tree */
 struct nbt *nbt_find(struct nbt *, enum tag, char *name);
 

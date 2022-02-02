@@ -645,6 +645,45 @@ struct nbt *nbt_get(struct nbt *root, enum tag t, char *name)
 	return nbt_tree_search(root, t, name, false);
 }
 
+bool nbt_get_value(struct nbt *root, enum tag t, char *name, void *out)
+{
+	struct nbt *nbt = nbt_get(root, t, name);
+	if (nbt != NULL) {
+		size_t bytes = 0;
+		switch (t) {
+		case TAG_End:
+			/* what the dog doin? */
+			break;
+		case TAG_Byte:
+			bytes = 1;
+			break;
+		case TAG_Short:
+			bytes = 2;
+			break;
+		case TAG_Int:
+		case TAG_Float:
+			bytes = 4;
+			break;
+		case TAG_Long:
+		case TAG_Double:
+			bytes = 8;
+			break;
+		case TAG_String:
+		case TAG_Byte_Array:
+		case TAG_Int_Array:
+		case TAG_Long_Array:
+		case TAG_List:
+		case TAG_Compound:
+			bytes = sizeof(void *);
+			break;
+		}
+		if (bytes != 0) {
+			memcpy(out, &nbt->data, bytes);
+		}
+	}
+	return nbt != NULL;
+}
+
 struct nbt *nbt_find(struct nbt *root, enum tag t, char *name)
 {
 	return nbt_tree_search(root, t, name, true);

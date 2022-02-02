@@ -5,9 +5,12 @@
 #include "hashmap.h"
 #include "region.h"
 
+#include <stdint.h>
+
 struct world;
 
 struct world *world_new(char *world_path, struct hashmap *block_table);
+uint64_t world_get_spawn(struct world *);
 /* Takes region x,z coords */
 struct region *world_region_at(struct world *, int x, int z);
 /* Takes chunk coordinates within a region. */

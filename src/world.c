@@ -1,7 +1,10 @@
 #include "world.h"
 
 #include "anvil.h"
+#include "nbt.h"
+#include "nbt_extra.h"
 #include "region.h"
+#include "strutil.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -11,17 +14,71 @@
 
 struct world {
 	char *world_path;
+	struct nbt *level_data;
 	struct hashmap *block_table;
 	struct hashmap *regions;
 };
 
 struct world *world_new(char *world_path, struct hashmap *block_table)
 {
+	char *level_data_path;
+	if (asprintf(&level_data_path, "%s/level.dat", world_path) < 0) {
+		return NULL;
+	}
+	FILE *level_data_file = fopen(level_data_path, "r");
+	free(level_data_path);
+	if (level_data_file == NULL) {
+		perror(level_data_path);
+		return NULL;
+	}
+	struct nbt *level_data;
+	int err = nbt_unpack_file(fileno(level_data_file), &level_data);
+	fclose(level_data_file);
+	if (err != 0) {
+		return NULL;
+	}
+	struct nbt *data = nbt_get(level_data, TAG_Compound, "Data");
+	int data_version;
+	if (data == NULL) {
+		nbt_free(level_data);
+		fprintf(stderr, "malformed level.dat\n");
+		return NULL;
+	} else if (!nbt_get_value(data, TAG_Int, "DataVersion", &data_version)
+			|| data_version != ANVIL_DATA_VERSION) {
+		nbt_free(level_data);
+		fprintf(stderr, "incompatible level version\n");
+		return NULL;
+	}
+
 	struct world *w = malloc(sizeof(struct world));
 	w->world_path = world_path;
+	w->level_data = level_data;
 	w->block_table = block_table;
 	w->regions = hashmap_new(1);
 	return w;
+}
+
+/* FIXME: this should be in a public header */
+/* https://wiki.vg/index.php?title=Protocol&oldid=16067#Position */
+static uint64_t mc_xyz_to_position(uint64_t x, uint16_t y, uint64_t z)
+{
+	return ((x & 0x3FFFFFF) << 38) | ((z & 0x3FFFFFF) << 12) | (y & 0xFFF);
+}
+
+uint64_t world_get_spawn(struct world *w)
+{
+	uint32_t spawn_x = 0;
+	uint32_t spawn_y = 0;
+	uint32_t spawn_z = 0;
+
+	/* TODO: NBT should really just be parsed into structs for stuff like this.
+	 *       Time for packet-auto-gen part 2, electric boogaloo */
+	struct nbt *data = nbt_get(w->level_data, TAG_Compound, "Data");
+	assert(data != NULL);
+	nbt_get_value(data, TAG_Int, "SpawnX", &spawn_x);
+	nbt_get_value(data, TAG_Int, "SpawnY", &spawn_y);
+	nbt_get_value(data, TAG_Int, "SpawnZ", &spawn_z);
+	return mc_xyz_to_position(spawn_x, spawn_y, spawn_z);
 }
 
 static size_t digits(int x)
@@ -122,6 +179,7 @@ struct chunk *world_chunk_at(struct world *w, int x, int z)
 void world_free(struct world *w)
 {
 	free(w->world_path);
+	nbt_free(w->level_data);
 	hashmap_free(w->block_table, true, free);
 	hashmap_free(w->regions, true, (free_item_func) free_region);
 }

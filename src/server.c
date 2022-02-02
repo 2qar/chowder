@@ -100,6 +100,15 @@ static void write_chunk_to_packet(struct chunk_data *packet,
 	}
 }
 
+/* FIXME: this should be in a common header */
+/* https://wiki.vg/index.php?title=Protocol&oldid=16067#Position */
+static void mc_position_to_xyz(uint64_t pos, uint32_t *x, uint16_t *y, uint32_t *z)
+{
+	*x = pos >> 38;
+	*y = pos & 0xFFF;
+	*z = (pos >> 12) & 0x3FFFFFF;
+}
+
 static int server_initialize_play_state(struct conn *conn, struct world *w)
 {
 	struct join_game join_packet = { .entity_id = 123, // TODO
@@ -186,7 +195,8 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 	nbt_free(nbt);
 	free(chunk_data_pack.data);
 
-	struct spawn_position spawn_pos = { 0 };
+	struct spawn_position spawn_pos;
+	spawn_pos.location = world_get_spawn(w);
 	err = PROTOCOL_WRITE(spawn_position, conn, &spawn_pos);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): failed to "
@@ -195,6 +205,14 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 	}
 
 	struct cb_player_position_look pos_and_look = { 0 };
+	uint32_t x;
+	uint16_t y;
+	uint32_t z;
+	mc_position_to_xyz(spawn_pos.location, &x, &y, &z);
+	pos_and_look.x = x;
+	pos_and_look.y = y;
+	pos_and_look.z = z;
+	printf("SPAWN!!! x=%d, y=%d, z=%d\n", x,y,z);
 	conn->teleport_id = 123;
 	pos_and_look.teleport_id = conn->teleport_id;
 	err = PROTOCOL_WRITE(cb_player_position_look, conn, &pos_and_look);
