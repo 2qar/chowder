@@ -59,6 +59,7 @@ int nbt_unpack_file(int fd, struct nbt **out)
 
 	struct nbt *nbt;
 	size_t bytes_parsed = nbt_unpack(bytes_read, buf, &nbt);
+	free(buf);
 	if (bytes_parsed == 0) {
 		return -1;
 	}
