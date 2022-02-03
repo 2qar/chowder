@@ -81,6 +81,10 @@ int main()
 		exit(EXIT_FAILURE);
 
 	struct world *w = world_new(level_path, block_table);
+	if (w == NULL) {
+		free(level_path);
+		exit(EXIT_FAILURE);
+	}
 	struct list *connections = list_new();
 	struct packet packet;
 	packet_init(&packet);
