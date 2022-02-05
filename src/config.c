@@ -9,6 +9,8 @@
 
 #define LINE_LEN 1024
 
+struct server_properties server_properties;
+
 enum cv_type {
 	CV_NONE,
 	CV_NUM,
