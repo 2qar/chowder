@@ -3,6 +3,7 @@
 
 #include "chunk.h"
 #include "hashmap.h"
+#include "region.h"
 
 #include <stdio.h>
 
@@ -42,7 +43,6 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table,
 enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
 			       int x, int z, struct chunk **out);
 /* assumes (x1,z1) and (x2,z2) are in the same region. */
-enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *,
-				struct chunk *out[32][32]);
+enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *, struct region *);
 
 #endif // CHOWDER_ANVIL_H

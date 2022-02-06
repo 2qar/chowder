@@ -1,6 +1,7 @@
 #include "anvil.h"
 
 #include "nbt.h"
+#include "region.h"
 
 #include <assert.h>
 #include <endian.h>
@@ -277,7 +278,7 @@ enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
 }
 
 enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx,
-				struct chunk *chunks[32][32])
+				struct region *region)
 {
 	assert(ctx->x1 / 32 == ctx->x2 / 32);
 	assert(ctx->z1 / 32 == ctx->z2 / 32);
@@ -299,7 +300,7 @@ enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx,
 			if (err == ANVIL_CHUNK_MISSING) {
 				++missing;
 			} else {
-				chunks[z][x] = chunk;
+				region_set_chunk(region, x, z, chunk);
 			}
 			++x;
 		}
