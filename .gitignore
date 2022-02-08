@@ -6,3 +6,4 @@ utils/cv/cv
 utils/nbtv/nbtv
 build/
 server.properties
+*tests
