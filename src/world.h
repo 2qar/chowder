@@ -10,6 +10,8 @@
 struct world;
 
 struct world *world_new(char *world_path, struct hashmap *block_table);
+/* returns 0 on success, or -1 on error */
+int world_load_level_data(struct world *);
 uint64_t world_get_spawn(struct world *);
 /* Takes region x,z coords */
 struct region *world_region_at(struct world *, int x, int z);

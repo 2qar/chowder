@@ -21,41 +21,47 @@ struct world {
 
 struct world *world_new(char *world_path, struct hashmap *block_table)
 {
+	struct world *w = malloc(sizeof(struct world));
+	w->world_path = world_path;
+	w->level_data = NULL;
+	w->block_table = block_table;
+	w->regions = hashmap_new(1);
+	return w;
+}
+
+int world_load_level_data(struct world *world)
+{
 	char *level_data_path;
-	if (asprintf(&level_data_path, "%s/level.dat", world_path) < 0) {
-		return NULL;
+	if (asprintf(&level_data_path, "%s/level.dat", world->world_path) < 0) {
+		return -1;
 	}
 	FILE *level_data_file = fopen(level_data_path, "r");
 	free(level_data_path);
 	if (level_data_file == NULL) {
 		perror(level_data_path);
-		return NULL;
+		return -1;
 	}
 	struct nbt *level_data;
 	int err = nbt_unpack_file(fileno(level_data_file), &level_data);
 	fclose(level_data_file);
 	if (err != 0) {
-		return NULL;
+		return -1;
 	}
 	struct nbt *data = nbt_get(level_data, TAG_Compound, "Data");
 	int data_version;
 	if (data == NULL) {
 		nbt_free(level_data);
 		fprintf(stderr, "malformed level.dat\n");
-		return NULL;
+		return -1;
 	} else if (!nbt_get_value(data, TAG_Int, "DataVersion", &data_version)
 			|| data_version != ANVIL_DATA_VERSION) {
 		nbt_free(level_data);
 		fprintf(stderr, "incompatible level version\n");
-		return NULL;
+		return -1;
 	}
 
-	struct world *w = malloc(sizeof(struct world));
-	w->world_path = world_path;
-	w->level_data = level_data;
-	w->block_table = block_table;
-	w->regions = hashmap_new(1);
-	return w;
+	world->level_data = level_data;
+	return 0;
 }
 
 /* FIXME: this should be in a public header */

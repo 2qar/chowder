@@ -84,6 +84,9 @@ int main()
 	if (w == NULL) {
 		free(level_path);
 		exit(EXIT_FAILURE);
+	} else if (world_load_level_data(w) < 0) {
+		world_free(w);
+		exit(EXIT_FAILURE);
 	}
 	struct list *connections = list_new();
 	struct packet packet;
