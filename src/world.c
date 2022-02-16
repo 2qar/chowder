@@ -1,6 +1,7 @@
 #include "world.h"
 
 #include "anvil.h"
+#include "mc.h"
 #include "nbt.h"
 #include "nbt_extra.h"
 #include "region.h"
@@ -54,7 +55,7 @@ int world_load_level_data(struct world *world)
 		fprintf(stderr, "malformed level.dat\n");
 		return -1;
 	} else if (!nbt_get_value(data, TAG_Int, "DataVersion", &data_version)
-			|| data_version != ANVIL_DATA_VERSION) {
+		   || data_version != ANVIL_DATA_VERSION) {
 		nbt_free(level_data);
 		fprintf(stderr, "incompatible level version\n");
 		return -1;
@@ -77,8 +78,8 @@ uint64_t world_get_spawn(struct world *w)
 	uint32_t spawn_y = 0;
 	uint32_t spawn_z = 0;
 
-	/* TODO: NBT should really just be parsed into structs for stuff like this.
-	 *       Time for packet-auto-gen part 2, electric boogaloo */
+	/* TODO: NBT should really just be parsed into structs for stuff like
+	 * this. Time for packet-auto-gen part 2, electric boogaloo */
 	struct nbt *data = nbt_get(w->level_data, TAG_Compound, "Data");
 	assert(data != NULL);
 	nbt_get_value(data, TAG_Int, "SpawnX", &spawn_x);
@@ -122,13 +123,15 @@ struct region *world_region_at(struct world *w, int x, int z)
 	return r;
 }
 
-enum anvil_err world_load_chunks(struct world *w, int x1, int z1, int x2,
-				 int z2)
+/* Loads chunks from (c1_x,c1_z) to (c2_x, c2_z), assuming those two "points"
+ * are in the same region. */
+static enum anvil_err world_load_chunks_aux(struct world *w, int c1_x, int c1_z,
+					    int c2_x, int c2_z)
 {
-	// FIXME: this restriction shouldn't be a thing
-	int r_x = x1 / 32;
-	int r_z = z1 / 32;
-	assert(r_x == x2 / 32 && r_z == z2 / 32);
+	int r_x = mc_chunk_to_region(c1_x);
+	int r_z = mc_chunk_to_region(c1_z);
+	assert(r_x == mc_chunk_to_region(c2_x)
+	       && r_z == mc_chunk_to_region(c2_z));
 	size_t region_file_path_len = strlen(w->world_path)
 				      + strlen("/region/r...mca") + digits(r_x)
 				      + digits(r_z) + 1;
@@ -149,15 +152,18 @@ enum anvil_err world_load_chunks(struct world *w, int x1, int z1, int x2,
 		r->z = r_z;
 		world_add_region(w, r);
 	}
+
 	struct anvil_get_chunks_ctx ctx = {
 		.region_file = region_file,
 		.block_table = w->block_table,
-		.x1 = x1,
-		.z1 = z1,
-		.x2 = x2,
-		.z2 = z2,
+		.x1 = mc_localized_chunk(c1_x),
+		.z1 = mc_localized_chunk(c1_z),
+		// FIXME: anvil_get_chunks() isn't inclusive, hence the +1.
+		//        It should be.
+		.x2 = mc_localized_chunk(c2_x) + 1,
+		.z2 = mc_localized_chunk(c2_z) + 1,
 	};
-	enum anvil_err err = anvil_get_chunks(&ctx, r->chunks);
+	enum anvil_err err = anvil_get_chunks(&ctx, r);
 	fclose(region_file);
 	if (err != ANVIL_OK) {
 		fprintf(stderr, "failed to load chunk at (%d,%d): %d\n",
@@ -166,20 +172,62 @@ enum anvil_err world_load_chunks(struct world *w, int x1, int z1, int x2,
 	return err;
 }
 
-struct chunk *world_chunk_at(struct world *w, int x, int z)
+enum anvil_err world_load_chunks(struct world *w, int x, int z,
+				 int view_distance)
 {
-	struct chunk *c = NULL;
+	int brc_x, brc_z; // Bottom right chunk in a 4-region intersection
+	int c1_x, c1_z, c2_x, c2_z;
+	int r1_x, r1_z, r2_x, r2_z;
 
-	int r_x = x / 512;
-	int r_z = z / 512;
+	// FIXME: dumb!!!! this should work up to the max view distance of 32
+	assert(view_distance <= 15);
+
+	c1_x = mc_coord_to_chunk(x - view_distance * 16);
+	c1_z = mc_coord_to_chunk(z - view_distance * 16);
+	c2_x = mc_coord_to_chunk(x + view_distance * 16);
+	c2_z = mc_coord_to_chunk(z + view_distance * 16);
+	r1_x = mc_chunk_to_region(c1_x);
+	r1_z = mc_chunk_to_region(c1_z);
+	r2_x = mc_chunk_to_region(c2_x);
+	r2_z = mc_chunk_to_region(c2_z);
+	brc_x = r2_x * 32;
+	brc_z = r2_z * 32;
+
+	if (r1_x != r2_x && r1_z != r2_z) {
+		return world_load_chunks_aux(w, c1_x, c1_z, brc_x - 1,
+					     brc_z - 1) // top left quad
+		       || world_load_chunks_aux(w, brc_x, c1_z, c2_x,
+						brc_z - 1) // top right
+		       || world_load_chunks_aux(w, c1_x, brc_z, brc_x - 1,
+						c2_z) // bottom left
+		       || world_load_chunks_aux(w, brc_x, brc_z, c2_x,
+						c2_z); // bottom right
+	} else if (r1_x != r2_x) {
+		return world_load_chunks_aux(w, c1_x, c1_z, brc_x - 1,
+					     c2_z) // left half
+		       || world_load_chunks_aux(w, brc_x, c1_z, c2_x,
+						c2_z); // right half
+	} else if (r1_z != r2_z) {
+		return world_load_chunks_aux(w, c1_x, c1_z, c2_x,
+					     brc_z - 1) // top half
+		       || world_load_chunks_aux(w, c1_x, brc_z, c2_x,
+						c2_z); // bottom half
+	} else {
+		return world_load_chunks_aux(w, c1_x, c1_z, c2_x, c2_z);
+	}
+}
+
+struct chunk *world_chunk_at(struct world *w, int c_x, int c_z)
+{
+	int r_x = mc_chunk_to_region(c_x);
+	int r_z = mc_chunk_to_region(c_z);
 	struct region *r = world_region_at(w, r_x, r_z);
 	if (r != NULL) {
-		int c_x = (x % 512) / 16;
-		int c_z = (z % 512) / 16;
-		c = r->chunks[c_z][c_x];
+		return region_get_chunk(r, mc_localized_chunk(c_x),
+					mc_localized_chunk(c_z));
+	} else {
+		return NULL;
 	}
-
-	return c;
 }
 
 void world_free(struct world *w)

@@ -1,7 +1,9 @@
 #include "server.h"
 
 #include "action.h"
+#include "config.h"
 #include "login.h"
+#include "mc.h"
 #include "protocol.h"
 #include "protocol_autogen.h"
 #include "strutil.h"
@@ -102,7 +104,8 @@ static void write_chunk_to_packet(struct chunk_data *packet,
 
 /* FIXME: this should be in a common header */
 /* https://wiki.vg/index.php?title=Protocol&oldid=16067#Position */
-static void mc_position_to_xyz(uint64_t pos, uint32_t *x, uint16_t *y, uint32_t *z)
+static void mc_position_to_xyz(uint64_t pos, uint32_t *x, uint16_t *y,
+			       uint32_t *z)
 {
 	*x = pos >> 38;
 	*y = pos & 0xFFF;
@@ -153,11 +156,29 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 		return -1;
 	}
 
-	if (world_load_chunks(w, 0, 0, 16, 16) != ANVIL_OK) {
+	// TODO: loading spawn should happen on server startup
+	uint64_t spawn_location = world_get_spawn(w);
+	uint32_t spawn_x = 0;
+	uint16_t spawn_y = 0;
+	uint32_t spawn_z = 0;
+	mc_position_to_xyz(spawn_location, &spawn_x, &spawn_y, &spawn_z);
+	if (world_load_chunks(w, spawn_x, spawn_z,
+			      server_properties.view_distance)
+	    != ANVIL_OK) {
 		fprintf(stderr, "failed to load chunks\n");
 		return -1;
 	}
-	struct region *region = world_region_at(w, 0, 0);
+
+	struct update_view_position view_pack = { 0 };
+	view_pack.chunk_x = mc_coord_to_chunk(spawn_x);
+	view_pack.chunk_z = mc_coord_to_chunk(spawn_z);
+	err = PROTOCOL_WRITE(update_view_position, conn, &view_pack);
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr, "server_initialize_play_state(): failed to"
+				"send 'update view position' packet\n");
+		return -1;
+	}
+
 	struct chunk_data chunk_data_pack = { 0 };
 	chunk_data_pack.full_chunk = true;
 	/* TODO: calculate heightmaps / load them from the region file */
@@ -171,13 +192,22 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 	motion_blocking->data.array = arr;
 	chunk_data_pack.heightmaps = nbt;
 	int32_t data_len = 0;
-	for (int z = 0; z < 16; ++z) {
-		for (int x = 0; x < 16; ++x) {
-			if (region->chunks[z][x] != NULL) {
+	int c1_x =
+	    mc_coord_to_chunk(spawn_x - server_properties.view_distance * 16);
+	int c1_z =
+	    mc_coord_to_chunk(spawn_z - server_properties.view_distance * 16);
+	int c2_x =
+	    mc_coord_to_chunk(spawn_x + server_properties.view_distance * 16);
+	int c2_z =
+	    mc_coord_to_chunk(spawn_z + server_properties.view_distance * 16);
+	struct chunk *chunk = NULL;
+	for (int z = c1_z; z <= c2_z; ++z) {
+		for (int x = c1_x; x <= c2_x; ++x) {
+			chunk = world_chunk_at(w, x, z);
+			if (chunk != NULL) {
 				chunk_data_pack.chunk_x = x;
 				chunk_data_pack.chunk_z = z;
-				write_chunk_to_packet(&chunk_data_pack,
-						      region->chunks[z][x],
+				write_chunk_to_packet(&chunk_data_pack, chunk,
 						      &data_len);
 				err = PROTOCOL_WRITE(chunk_data, conn,
 						     &chunk_data_pack);
@@ -196,7 +226,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 	free(chunk_data_pack.data);
 
 	struct spawn_position spawn_pos;
-	spawn_pos.location = world_get_spawn(w);
+	spawn_pos.location = spawn_location;
 	err = PROTOCOL_WRITE(spawn_position, conn, &spawn_pos);
 	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
 		fprintf(stderr, "server_initialize_play_state(): failed to "
@@ -205,14 +235,9 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 	}
 
 	struct cb_player_position_look pos_and_look = { 0 };
-	uint32_t x;
-	uint16_t y;
-	uint32_t z;
-	mc_position_to_xyz(spawn_pos.location, &x, &y, &z);
-	pos_and_look.x = x;
-	pos_and_look.y = y;
-	pos_and_look.z = z;
-	printf("SPAWN!!! x=%d, y=%d, z=%d\n", x,y,z);
+	pos_and_look.x = spawn_x;
+	pos_and_look.y = spawn_y;
+	pos_and_look.z = spawn_z;
 	conn->teleport_id = 123;
 	pos_and_look.teleport_id = conn->teleport_id;
 	err = PROTOCOL_WRITE(cb_player_position_look, conn, &pos_and_look);

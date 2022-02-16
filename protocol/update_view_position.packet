@@ -1,0 +1,4 @@
+id = 0x41
+
+VarInt chunk_x
+VarInt chunk_z

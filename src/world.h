@@ -15,10 +15,11 @@ int world_load_level_data(struct world *);
 uint64_t world_get_spawn(struct world *);
 /* Takes region x,z coords */
 struct region *world_region_at(struct world *, int x, int z);
-/* Takes chunk coordinates within a region. */
-enum anvil_err world_load_chunks(struct world *, int x1, int z1, int x2,
-				 int z2);
-struct chunk *world_chunk_at(struct world *, int x, int z);
+/* Takes a global position */
+enum anvil_err world_load_chunks(struct world *, int x, int z,
+				 int view_distance);
+/* Takes global chunk coordinates */
+struct chunk *world_chunk_at(struct world *, int c_x, int c_z);
 
 void world_free(struct world *w);
 
