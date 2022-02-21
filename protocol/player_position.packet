@@ -1,0 +1,6 @@
+id = 0x11
+
+Double x
+Double feet_y
+Double z
+Bool on_ground

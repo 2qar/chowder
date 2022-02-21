@@ -22,6 +22,8 @@ struct protocol_action protocol_actions[UINT8_MAX] = {
 	ACTION(sb_keep_alive),
 	ACTION(player_block_placement),
 	ACTIONMF(sb_chat_message),
+	ACTION(player_position),
+	ACTION(sb_player_position_rotation),
 };
 
 #define MSG_ACTION(PACKET_NAME, OUT_PACKET_NAME)                               \

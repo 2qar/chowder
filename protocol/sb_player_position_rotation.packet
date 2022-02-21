@@ -1,0 +1,8 @@
+id = 0x12
+
+Double x
+Double feet_y
+Double z
+Float yaw
+Float pitch
+Bool on_ground
