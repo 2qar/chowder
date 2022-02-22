@@ -341,7 +341,7 @@ int packet_write_short(struct packet *p, int16_t s)
 	return packet_write_bytes(p, sizeof(uint16_t), &ns);
 }
 
-int packet_write_varint(struct packet *p, int i)
+int packet_write_varint(struct packet *p, uint32_t i)
 {
 	uint8_t temp;
 	int n = 0;

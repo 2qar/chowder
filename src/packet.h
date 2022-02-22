@@ -73,7 +73,7 @@ ssize_t write_packet(int, const struct packet *);
 int packet_write_byte(struct packet *, uint8_t);
 int packet_write_bytes(struct packet *, size_t len, const void *);
 int packet_write_short(struct packet *, int16_t);
-int packet_write_varint(struct packet *, int);
+int packet_write_varint(struct packet *, uint32_t);
 int packet_write_string(struct packet *, int, const char[]);
 int packet_write_int(struct packet *, int32_t);
 int packet_write_float(struct packet *, float);
