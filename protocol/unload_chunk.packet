@@ -1,0 +1,4 @@
+id = 0x1e
+
+Int chunk_x
+Int chunk_z

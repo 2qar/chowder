@@ -230,6 +230,26 @@ struct chunk *world_chunk_at(struct world *w, int c_x, int c_z)
 	}
 }
 
+void world_chunk_dec_players(struct world *w, int c_x, int c_z)
+{
+	int r_x = mc_chunk_to_region(c_x);
+	int r_z = mc_chunk_to_region(c_z);
+	struct region *region = world_region_at(w, r_x, r_z);
+	if (region != NULL) {
+		int lc_x = mc_localized_chunk(c_x);
+		int lc_z = mc_localized_chunk(c_z);
+		struct chunk *chunk = region_get_chunk(region, lc_x, lc_z);
+		if (chunk != NULL) {
+			// FIXME: player count is becoming negative???
+			--chunk->player_count;
+			if (chunk->player_count == 0) {
+				region_set_chunk(region, lc_x, lc_z, NULL);
+				free_chunk(chunk);
+			}
+		}
+	}
+}
+
 void world_free(struct world *w)
 {
 	free(w->world_path);

@@ -121,12 +121,16 @@ int main()
 
 		struct list *connection = connections;
 		while (!list_empty(connection)) {
-			int status = server_play(list_item(connection), w);
+			struct conn *c = list_item(connection);
+			int status = server_play(c, w);
 			if (status <= 0) {
-				struct conn *c = list_remove(connection);
+				list_remove(connection);
 				conn_finish(c);
 				free(c);
 			} else {
+				if (c->requesting_chunks) {
+					server_update_view(c, w);
+				}
 				connection = list_next(connection);
 			}
 		}

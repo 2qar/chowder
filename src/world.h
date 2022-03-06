@@ -20,6 +20,7 @@ enum anvil_err world_load_chunks(struct world *, int x, int z,
 				 int view_distance);
 /* Takes global chunk coordinates */
 struct chunk *world_chunk_at(struct world *, int c_x, int c_z);
+void world_chunk_dec_players(struct world *w, int c_x, int c_z);
 
 void world_free(struct world *w);
 

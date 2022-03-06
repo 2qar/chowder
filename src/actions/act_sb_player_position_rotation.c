@@ -8,6 +8,7 @@ void protocol_act_sb_player_position_rotation(struct conn *conn,
 	(void) world;
 
 	struct sb_player_position_rotation *position = data;
+	conn_update_view_position_if_needed(conn, position->x, position->z);
 	conn->player->x = position->x;
 	conn->player->y = position->feet_y;
 	conn->player->z = position->z;

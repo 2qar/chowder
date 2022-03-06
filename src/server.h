@@ -17,5 +17,7 @@ struct conn *server_accept_connection(int sfd, struct packet *, struct world *,
 int server_play(struct conn *, struct world *);
 struct protocol_do_err server_send_messages(struct list *connections,
 					    struct list *messages);
+/* Load new chunks and unload old ones for the given connection */
+int server_update_view(struct conn *, struct world *);
 
 #endif

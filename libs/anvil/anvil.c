@@ -209,6 +209,8 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table,
 	struct list *l = sections->data.list->head;
 	struct chunk *c = malloc(sizeof(struct chunk));
 	c->sections_len = 0;
+	// FIXME: remove this
+	c->player_count = 0;
 	while (!list_empty(l)) {
 		struct nbt *s_nbt = list_item(l);
 		struct section *s = calloc(1, sizeof(struct section));

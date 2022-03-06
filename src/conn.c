@@ -1,5 +1,6 @@
 #include "conn.h"
 
+#include "mc.h"
 #include "message.h"
 
 #include <stdio.h>
@@ -124,4 +125,19 @@ ssize_t conn_write_packet(struct conn *c)
 	if (c->_encrypt_ctx != NULL)
 		return write_encrypted_packet(c);
 	return write_packet(c->sfd, finalize_packet(c->packet));
+}
+
+void conn_update_view_position_if_needed(struct conn *c, double new_x,
+					 double new_z)
+{
+	int old_chunk_x = mc_coord_to_chunk(c->player->x);
+	int old_chunk_z = mc_coord_to_chunk(c->player->z);
+	int new_chunk_x = mc_coord_to_chunk(new_x);
+	int new_chunk_z = mc_coord_to_chunk(new_z);
+
+	if (old_chunk_x != new_chunk_x || old_chunk_z != new_chunk_z) {
+		c->requesting_chunks = true;
+		c->old_chunk_x = old_chunk_x;
+		c->old_chunk_z = old_chunk_z;
+	}
 }

@@ -7,6 +7,7 @@
 #include "protocol.h"
 #include "protocol_autogen.h"
 #include "strutil.h"
+#include "view.h"
 #include "world.h"
 
 #include <poll.h>
@@ -140,6 +141,11 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 		    "server_initialize_play_state(): client_settings failed\n");
 		return -1;
 	}
+	/* FIXME: this should be the minimum of the client's preference and
+	 *        the server's view distance */
+	/* FIXME: conn->view_distance should be used pretty much everywhere
+	 *        'server_properties.view_distance' is referenced */
+	conn->view_distance = server_properties.view_distance;
 	free(client_settings_pack.locale);
 	struct cb_held_item_change held_item_change_pack = { .slot = 0 };
 	err = PROTOCOL_WRITE(cb_held_item_change, conn, &held_item_change_pack);
@@ -178,6 +184,8 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 				"send 'update view position' packet\n");
 		return -1;
 	}
+	conn->old_chunk_x = view_pack.chunk_x;
+	conn->old_chunk_z = view_pack.chunk_z;
 
 	struct chunk_data chunk_data_pack = { 0 };
 	chunk_data_pack.full_chunk = true;
@@ -205,6 +213,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 		for (int x = c1_x; x <= c2_x; ++x) {
 			chunk = world_chunk_at(w, x, z);
 			if (chunk != NULL) {
+				++chunk->player_count;
 				chunk_data_pack.chunk_x = x;
 				chunk_data_pack.chunk_z = z;
 				write_chunk_to_packet(&chunk_data_pack, chunk,
@@ -246,6 +255,9 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 				"send player_position_look failed\n");
 		return -1;
 	}
+	conn->player->x = spawn_x;
+	conn->player->y = spawn_y;
+	conn->player->z = spawn_z;
 
 	struct player_info_player player = { 0 };
 	memcpy(player.uuid, conn->player->uuid, 16);
@@ -396,4 +408,110 @@ struct protocol_do_err server_send_messages(struct list *connections,
 		message_free(msg);
 	}
 	return err;
+}
+
+/* FIXME: once again, the errors suck. there needs to be a giant combined error
+ *        type or something */
+int server_update_view(struct conn *conn, struct world *world)
+{
+	int new_chunk_x = mc_coord_to_chunk(conn->player->x);
+	int new_chunk_z = mc_coord_to_chunk(conn->player->z);
+	assert(new_chunk_x != conn->old_chunk_x
+	       || new_chunk_z != conn->old_chunk_z);
+
+	struct update_view_position view_pos;
+	view_pos.chunk_x = new_chunk_x;
+	view_pos.chunk_z = new_chunk_z;
+	struct protocol_do_err err =
+	    PROTOCOL_WRITE(update_view_position, conn, &view_pos);
+	if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+		fprintf(stderr,
+			"failed to write update_view_position packet :(\n");
+		return -1;
+	}
+
+	enum anvil_err load_err = world_load_chunks(
+	    world, conn->player->x, conn->player->z, conn->view_distance);
+	if (load_err != ANVIL_OK) {
+		fprintf(stderr, "failed to load chunks updating view\n");
+		return -1;
+	}
+
+	struct view old_view = {
+		.x = conn->old_chunk_x,
+		.z = conn->old_chunk_z,
+		.size = conn->view_distance,
+	};
+	struct view new_view = {
+		.x = new_chunk_x,
+		.z = new_chunk_z,
+		.size = conn->view_distance,
+	};
+
+	/* FIXME: the packets written here should probably be put into a queue
+	 *        on the connection for writing later so errors don't have to
+	 *        be handled here */
+	struct chunk_data chunk_data = { 0 };
+	chunk_data.full_chunk = true;
+
+	/* FIXME: these heightmaps really need to be handled properly, man */
+	struct nbt *nbt = nbt_new(TAG_Long_Array, "MOTION_BLOCKING");
+	struct nbt_array *arr = malloc(sizeof(struct nbt_array));
+	int64_t heightmaps[36] = { 0 };
+	arr->len = 36;
+	arr->data.longs = heightmaps;
+	struct nbt *motion_blocking =
+	    nbt_get(nbt, TAG_Long_Array, "MOTION_BLOCKING");
+	motion_blocking->data.array = arr;
+	chunk_data.heightmaps = nbt;
+
+	struct chunk *chunk;
+	int32_t chunk_data_len = 0;
+	int view_x;
+	int view_z;
+	VIEW_FOREACH(new_view, view_x, view_z)
+	{
+		if (!VIEW_CONTAINS(old_view, view_x, view_z)) {
+			chunk = world_chunk_at(world, view_x, view_z);
+			if (chunk != NULL) {
+				++chunk->player_count;
+				chunk_data.chunk_x = view_x;
+				chunk_data.chunk_z = view_z;
+				write_chunk_to_packet(&chunk_data, chunk,
+						      &chunk_data_len);
+				err = PROTOCOL_WRITE(chunk_data, conn,
+						     &chunk_data);
+				if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+					fprintf(
+					    stderr,
+					    "failed to write view chunk :(\n");
+				}
+			} else {
+				fprintf(stderr, "null chunky :( (%d,%d)\n",
+					view_x, view_z);
+			}
+		}
+	}
+	free(chunk_data.data);
+	/* FIXME: heightmapsssssss */
+	arr->data.longs = NULL;
+	nbt_free(nbt);
+
+	struct unload_chunk unload_packet;
+	VIEW_FOREACH(old_view, view_x, view_z)
+	{
+		if (!VIEW_CONTAINS(new_view, view_x, view_z)) {
+			world_chunk_dec_players(world, view_x, view_z);
+			unload_packet.chunk_x = view_x;
+			unload_packet.chunk_z = view_z;
+			err =
+			    PROTOCOL_WRITE(unload_chunk, conn, &unload_packet);
+			if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+				fprintf(stderr,
+					"failed to write view unload :(\n");
+			}
+		}
+	}
+	conn->requesting_chunks = false;
+	return 0;
 }
