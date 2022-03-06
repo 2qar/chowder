@@ -156,12 +156,10 @@ static enum anvil_err world_load_chunks_aux(struct world *w, int c1_x, int c1_z,
 	struct anvil_get_chunks_ctx ctx = {
 		.region_file = region_file,
 		.block_table = w->block_table,
-		.x1 = mc_localized_chunk(c1_x),
-		.z1 = mc_localized_chunk(c1_z),
-		// FIXME: anvil_get_chunks() isn't inclusive, hence the +1.
-		//        It should be.
-		.x2 = mc_localized_chunk(c2_x) + 1,
-		.z2 = mc_localized_chunk(c2_z) + 1,
+		.cx1 = mc_localized_chunk(c1_x),
+		.cz1 = mc_localized_chunk(c1_z),
+		.cx2 = mc_localized_chunk(c2_x),
+		.cz2 = mc_localized_chunk(c2_z),
 	};
 	enum anvil_err err = anvil_get_chunks(&ctx, r);
 	fclose(region_file);

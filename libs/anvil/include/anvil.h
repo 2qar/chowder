@@ -24,8 +24,8 @@ enum anvil_err {
 struct anvil_get_chunks_ctx {
 	FILE *region_file;
 	struct hashmap *block_table;
-	int x1, z1;
-	int x2, z2;
+	int cx1, cz1;
+	int cx2, cz2;
 	int err_x, err_z;
 	int missing;
 };
@@ -42,7 +42,8 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table,
  * anvil_parse_chunk(), except they handle the buffer junk for you. */
 enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
 			       int x, int z, struct chunk **out);
-/* assumes (x1,z1) and (x2,z2) are in the same region. */
+/* Get all chunks in the range (cx1,cz1) -> (cx2,cz2), inclusive, assuming
+ * those two chunks are in the same region */
 enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *, struct region *);
 
 #endif // CHOWDER_ANVIL_H

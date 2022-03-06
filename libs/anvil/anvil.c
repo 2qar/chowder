@@ -282,20 +282,22 @@ enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
 enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx,
 				struct region *region)
 {
-	assert(ctx->x1 / 32 == ctx->x2 / 32);
-	assert(ctx->z1 / 32 == ctx->z2 / 32);
+	// FIXME: these checks probably won't work properly for negative chunks
+	assert(ctx->cx1 / 32 == ctx->cx2 / 32);
+	assert(ctx->cz1 / 32 == ctx->cz2 / 32);
 
 	size_t chunk_buf_len = 0;
 	Bytef *chunk_buf = NULL;
 	struct chunk *chunk = NULL;
 	enum anvil_err err = ANVIL_OK;
-	int z = ctx->z1;
-	int x = ctx->x1;
+	int z = ctx->cz1;
+	int x = ctx->cx1;
 	// FIXME: ANVIL_CHUNK_MISSING shouldn't be an acceptable error
 	int missing = 0;
-	while (z < ctx->z2 && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
-		x = ctx->x1;
-		while (x < ctx->x2
+	while (z <= ctx->cz2
+	       && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
+		x = ctx->cx1;
+		while (x <= ctx->cx2
 		       && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
 			err = get_chunk(ctx->region_file, ctx->block_table, x,
 					z, &chunk_buf_len, &chunk_buf, &chunk);
