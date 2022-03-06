@@ -283,8 +283,10 @@ enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
 enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx,
 				struct region *region)
 {
-	assert(mc_chunk_to_region(ctx->cx1) == mc_chunk_to_region(ctx->cx2));
-	assert(mc_chunk_to_region(ctx->cz1) == mc_chunk_to_region(ctx->cz2));
+	if (mc_chunk_to_region(ctx->cx1) != mc_chunk_to_region(ctx->cx2)
+	    || mc_chunk_to_region(ctx->cz1) != mc_chunk_to_region(ctx->cz2)) {
+		return ANVIL_BAD_RANGE;
+	}
 
 	size_t chunk_buf_len = 0;
 	Bytef *chunk_buf = NULL;

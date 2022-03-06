@@ -19,6 +19,7 @@ enum anvil_err {
 	ANVIL_BAD_NBT,
 	ANVIL_BAD_CHUNK,
 	ANVIL_BAD_DATA_VERSION,
+	ANVIL_BAD_RANGE, /* chunk range spans more than one region */
 };
 
 struct anvil_get_chunks_ctx {
