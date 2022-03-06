@@ -1,5 +1,6 @@
 #include "anvil.h"
 
+#include "mc.h"
 #include "nbt.h"
 #include "region.h"
 
@@ -282,9 +283,8 @@ enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
 enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx,
 				struct region *region)
 {
-	// FIXME: these checks probably won't work properly for negative chunks
-	assert(ctx->cx1 / 32 == ctx->cx2 / 32);
-	assert(ctx->cz1 / 32 == ctx->cz2 / 32);
+	assert(mc_chunk_to_region(ctx->cx1) == mc_chunk_to_region(ctx->cx2));
+	assert(mc_chunk_to_region(ctx->cz1) == mc_chunk_to_region(ctx->cz2));
 
 	size_t chunk_buf_len = 0;
 	Bytef *chunk_buf = NULL;
