@@ -301,12 +301,15 @@ enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx,
 		x = ctx->cx1;
 		while (x <= ctx->cx2
 		       && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
-			err = get_chunk(ctx->region_file, ctx->block_table, x,
-					z, &chunk_buf_len, &chunk_buf, &chunk);
-			if (err == ANVIL_CHUNK_MISSING) {
-				++missing;
-			} else {
-				region_set_chunk(region, x, z, chunk);
+			if (region_get_chunk(region, x, z) == NULL) {
+				err = get_chunk(
+				    ctx->region_file, ctx->block_table, x, z,
+				    &chunk_buf_len, &chunk_buf, &chunk);
+				if (err == ANVIL_CHUNK_MISSING) {
+					++missing;
+				} else {
+					region_set_chunk(region, x, z, chunk);
+				}
 			}
 			++x;
 		}
