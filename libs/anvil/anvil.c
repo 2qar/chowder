@@ -269,12 +269,13 @@ enum anvil_err get_chunk(FILE *region_file, struct hashmap *block_table, int x,
 	}
 }
 
-enum anvil_err anvil_get_chunk(FILE *region_file, struct hashmap *block_table,
-			       int x, int z, struct chunk **out)
+enum anvil_err anvil_get_chunk(const struct region *region,
+			       struct hashmap *block_table, int x, int z,
+			       struct chunk **out)
 {
 	size_t chunk_buf_len = 0;
 	Bytef *chunk_buf = NULL;
-	enum anvil_err err = get_chunk(region_file, block_table, x, z,
+	enum anvil_err err = get_chunk(region->file, block_table, x, z,
 				       &chunk_buf_len, &chunk_buf, out);
 	free(chunk_buf);
 	return err;
@@ -302,9 +303,9 @@ enum anvil_err anvil_get_chunks(struct anvil_get_chunks_ctx *ctx,
 		while (x <= ctx->cx2
 		       && (err == ANVIL_OK || err == ANVIL_CHUNK_MISSING)) {
 			if (region_get_chunk(region, x, z) == NULL) {
-				err = get_chunk(
-				    ctx->region_file, ctx->block_table, x, z,
-				    &chunk_buf_len, &chunk_buf, &chunk);
+				err = get_chunk(region->file, ctx->block_table,
+						x, z, &chunk_buf_len,
+						&chunk_buf, &chunk);
 				if (err == ANVIL_CHUNK_MISSING) {
 					++missing;
 				} else {

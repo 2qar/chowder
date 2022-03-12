@@ -132,37 +132,24 @@ static enum anvil_err world_load_chunks_aux(struct world *w, int c1_x, int c1_z,
 	int r_z = mc_chunk_to_region(c1_z);
 	assert(r_x == mc_chunk_to_region(c2_x)
 	       && r_z == mc_chunk_to_region(c2_z));
-	size_t region_file_path_len = strlen(w->world_path)
-				      + strlen("/region/r...mca") + digits(r_x)
-				      + digits(r_z) + 1;
-	char *region_file_path = calloc(region_file_path_len, sizeof(char));
-	snprintf(region_file_path, region_file_path_len,
-		 "%s/region/r.%d.%d.mca", w->world_path, r_x, r_z);
-	printf("region file path: \"%s\"\n", region_file_path);
-	FILE *region_file = fopen(region_file_path, "r");
-	free(region_file_path);
-	if (region_file == NULL) {
-		perror("fopen");
-		return -1;
-	}
 	struct region *r = world_region_at(w, r_x, r_z);
+	enum anvil_err err;
 	if (r == NULL) {
-		r = calloc(1, sizeof(struct region));
-		r->x = r_x;
-		r->z = r_z;
+		err = region_open(w->world_path, r_x, r_z, &r);
+		if (err != ANVIL_OK) {
+			return err;
+		}
 		world_add_region(w, r);
 	}
 
 	struct anvil_get_chunks_ctx ctx = {
-		.region_file = region_file,
 		.block_table = w->block_table,
 		.cx1 = mc_localized_chunk(c1_x),
 		.cz1 = mc_localized_chunk(c1_z),
 		.cx2 = mc_localized_chunk(c2_x),
 		.cz2 = mc_localized_chunk(c2_z),
 	};
-	enum anvil_err err = anvil_get_chunks(&ctx, r);
-	fclose(region_file);
+	err = anvil_get_chunks(&ctx, r);
 	if (err != ANVIL_OK) {
 		fprintf(stderr, "failed to load chunk at (%d,%d): %d\n",
 			ctx.err_x, ctx.err_z, err);
