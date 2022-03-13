@@ -1,0 +1,4 @@
+id = 0x69
+
+ByteArray(1024) bytes
+ByteArray(Int) encoded_int

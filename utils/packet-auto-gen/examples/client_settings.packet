@@ -1,0 +1,15 @@
+id = 0x05
+
+String(16) locale
+Byte view_distance
+Enum(Varint) chat_mode {
+	ENABLED
+	COMMANDS_ONLY
+	HIDDEN
+}
+Bool chat_colors
+UByte displayed_skin_parts
+Enum(Varint) main_hand {
+	LEFT
+	RIGHT
+}

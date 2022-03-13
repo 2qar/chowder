@@ -1,0 +1,22 @@
+id = 0x26
+
+Int entity_id
+UByte gamemode
+Enum(Int) dimension {
+	NETHER = -1
+	OVERWORLD
+	END
+}
+Long hashed_seed
+UByte max_players
+Enum(String(16)) level_type {
+	"default"
+	"flat"
+	"largeBiomes"
+	"amplified"
+	"customized"
+	"buffet"
+	"default_1_1"
+}
+Bool reduced_debug_info
+Bool enable_respawn_screen

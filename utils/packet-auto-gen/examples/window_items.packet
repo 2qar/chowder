@@ -1,0 +1,5 @@
+id = 0x15
+
+UByte window_id
+Short slot_data_len
+Array(Slot) slot_data

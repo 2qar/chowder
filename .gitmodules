@@ -1,3 +1,0 @@
-[submodule "utils/packet-auto-gen"]
-	path = utils/packet-auto-gen
-	url = https://github.com/BigHeadGeorge/packet-auto-gen

@@ -1,0 +1,15 @@
+id = 0x33
+
+Enum(VarInt) feet_eyes {
+	FEET
+	EYES
+}
+Double target_x
+Double target_y
+Double target_z
+Bool is_entity
+VarInt entity_id (if is_entity)
+Enum(VarInt) entity_feet_eyes (if is_entity) {
+	FEET
+	EYES
+}

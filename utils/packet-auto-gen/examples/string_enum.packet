@@ -1,0 +1,12 @@
+id = 0x21
+
+Enum(String(16)) level_type {
+	"default"
+	"flat"
+	"largeBiomes"
+	"amplified"
+	"customized"
+	"buffet"
+	"default_1_1"
+}
+Bool test

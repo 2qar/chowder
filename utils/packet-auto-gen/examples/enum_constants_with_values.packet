@@ -1,0 +1,7 @@
+id = 0x21
+
+Enum(Int) dimension {
+	NETHER = -1
+	OVERWORLD
+	END = 5
+}

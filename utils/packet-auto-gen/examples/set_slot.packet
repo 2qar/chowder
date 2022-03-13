@@ -1,0 +1,5 @@
+id = 0x17
+
+Byte window_id
+Short slot
+Slot slot_data
