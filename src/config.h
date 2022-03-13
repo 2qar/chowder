@@ -43,7 +43,7 @@ struct server_properties {
 	uint32_t max_world_size;
 };
 
-struct server_properties server_properties;
+extern struct server_properties server_properties;
 
 enum config_err {
 	CONFIG_OK,
