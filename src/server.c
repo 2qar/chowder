@@ -311,6 +311,20 @@ struct conn *server_accept_connection(int sfd, struct packet *p,
 	return c;
 }
 
+static void server_end_play(struct conn *conn, struct world *world)
+{
+	struct view view = {
+		.x = mc_coord_to_chunk(conn->player->x),
+		.z = mc_coord_to_chunk(conn->player->z),
+		.size = conn->view_distance,
+	};
+	int vx, vz;
+	VIEW_FOREACH(view, vx, vz)
+	{
+		world_chunk_dec_players(world, vx, vz);
+	}
+}
+
 int server_play(struct conn *conn, struct world *w)
 {
 	struct pollfd pfd = { .fd = conn->sfd, .events = POLLIN };
@@ -320,6 +334,7 @@ int server_play(struct conn *conn, struct world *w)
 		int result = conn_packet_read_header(conn);
 		if (result == 0) {
 			puts("client closed connection");
+			server_end_play(conn, w);
 			return 0;
 		} else if (result < 0) {
 			fprintf(stderr, "error parsing packet\n");
@@ -362,6 +377,7 @@ int server_play(struct conn *conn, struct world *w)
 	if (time(NULL) - conn->last_pong > 30) {
 		puts("client hasn't sent a keep alive in a while, "
 		     "disconnecting");
+		server_end_play(conn, w);
 		return 0;
 	}
 
