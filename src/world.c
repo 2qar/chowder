@@ -6,6 +6,7 @@
 #include "nbt_extra.h"
 #include "region.h"
 #include "strutil.h"
+#include "view.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -123,83 +124,42 @@ struct region *world_region_at(struct world *w, int x, int z)
 	return r;
 }
 
-/* Loads chunks from (c1_x,c1_z) to (c2_x, c2_z), assuming those two "points"
- * are in the same region. */
-static enum anvil_err world_load_chunks_aux(struct world *w, int c1_x, int c1_z,
-					    int c2_x, int c2_z)
-{
-	int r_x = mc_chunk_to_region(c1_x);
-	int r_z = mc_chunk_to_region(c1_z);
-	assert(r_x == mc_chunk_to_region(c2_x)
-	       && r_z == mc_chunk_to_region(c2_z));
-	struct region *r = world_region_at(w, r_x, r_z);
-	enum anvil_err err;
-	if (r == NULL) {
-		err = region_open(w->world_path, r_x, r_z, &r);
-		if (err != ANVIL_OK) {
-			return err;
-		}
-		world_add_region(w, r);
-	}
-
-	struct anvil_get_chunks_ctx ctx = {
-		.block_table = w->block_table,
-		.cx1 = mc_localized_chunk(c1_x),
-		.cz1 = mc_localized_chunk(c1_z),
-		.cx2 = mc_localized_chunk(c2_x),
-		.cz2 = mc_localized_chunk(c2_z),
-	};
-	err = anvil_get_chunks(&ctx, r);
-	if (err != ANVIL_OK) {
-		fprintf(stderr, "failed to load chunk at (%d,%d): %d\n",
-			ctx.err_x, ctx.err_z, err);
-	}
-	return err;
-}
-
 enum anvil_err world_load_chunks(struct world *w, int x, int z,
 				 int view_distance)
 {
-	int brc_x, brc_z; // Bottom right chunk in a 4-region intersection
-	int c1_x, c1_z, c2_x, c2_z;
-	int r1_x, r1_z, r2_x, r2_z;
-
-	// FIXME: dumb!!!! this should work up to the max view distance of 32
-	assert(view_distance <= 15);
-
-	c1_x = mc_coord_to_chunk(x - view_distance * 16);
-	c1_z = mc_coord_to_chunk(z - view_distance * 16);
-	c2_x = mc_coord_to_chunk(x + view_distance * 16);
-	c2_z = mc_coord_to_chunk(z + view_distance * 16);
-	r1_x = mc_chunk_to_region(c1_x);
-	r1_z = mc_chunk_to_region(c1_z);
-	r2_x = mc_chunk_to_region(c2_x);
-	r2_z = mc_chunk_to_region(c2_z);
-	brc_x = r2_x * 32;
-	brc_z = r2_z * 32;
-
-	if (r1_x != r2_x && r1_z != r2_z) {
-		return world_load_chunks_aux(w, c1_x, c1_z, brc_x - 1,
-					     brc_z - 1) // top left quad
-		       || world_load_chunks_aux(w, brc_x, c1_z, c2_x,
-						brc_z - 1) // top right
-		       || world_load_chunks_aux(w, c1_x, brc_z, brc_x - 1,
-						c2_z) // bottom left
-		       || world_load_chunks_aux(w, brc_x, brc_z, c2_x,
-						c2_z); // bottom right
-	} else if (r1_x != r2_x) {
-		return world_load_chunks_aux(w, c1_x, c1_z, brc_x - 1,
-					     c2_z) // left half
-		       || world_load_chunks_aux(w, brc_x, c1_z, c2_x,
-						c2_z); // right half
-	} else if (r1_z != r2_z) {
-		return world_load_chunks_aux(w, c1_x, c1_z, c2_x,
-					     brc_z - 1) // top half
-		       || world_load_chunks_aux(w, c1_x, brc_z, c2_x,
-						c2_z); // bottom half
-	} else {
-		return world_load_chunks_aux(w, c1_x, c1_z, c2_x, c2_z);
+	struct view view = { .x = mc_coord_to_chunk(x),
+			     .z = mc_coord_to_chunk(z),
+			     .size = view_distance };
+	int vx, vz;
+	VIEW_FOREACH(view, vx, vz)
+	{
+		int rx = mc_chunk_to_region(vx);
+		int rz = mc_chunk_to_region(vz);
+		struct region *region = world_region_at(w, rx, rz);
+		if (region == NULL) {
+			enum anvil_err err =
+			    region_open(w->world_path, rx, rz, &region);
+			if (err != ANVIL_OK) {
+				return err;
+			}
+			world_add_region(w, region);
+		}
+		int lcx = mc_localized_chunk(vx);
+		int lcz = mc_localized_chunk(vz);
+		if (region_get_chunk(region, lcx, lcz) == NULL) {
+			struct chunk *chunk = NULL;
+			enum anvil_err err = anvil_get_chunk(
+			    region, w->block_table, lcx, lcz, &chunk);
+			if (err != ANVIL_OK) {
+				/* FIXME: should one chunk failing to load
+				 *        really cause the whole thing to
+				 *        fail? */
+				return err;
+			}
+			region_set_chunk(region, lcx, lcz, chunk);
+		}
 	}
+	return ANVIL_OK;
 }
 
 struct chunk *world_chunk_at(struct world *w, int c_x, int c_z)
