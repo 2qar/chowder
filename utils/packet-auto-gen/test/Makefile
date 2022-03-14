@@ -1,10 +1,9 @@
-include config.mk
-
 CC=gcc
 CPPFLAGS=-I. -I../include -I$(build_dir) $(addprefix -I$(chowder_dir)/,libs/nbt/include libs/list/include libs/mc/include src)
 CFLAGS=-g -Wall -Werror -Wextra -pedantic
 LDFLAGS=`pkg-config --libs openssl`
 
+chowder_dir=../../../
 chowder_src_dirs=libs/nbt libs/list src libs/mc
 vpath %.c $(addprefix $(chowder_dir)/,$(chowder_src_dirs))
 
