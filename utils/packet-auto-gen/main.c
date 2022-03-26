@@ -131,7 +131,8 @@ int main(int argc, char *argv[])
 		return 1;
 	free_tokens(tokens);
 
-	create_parent_links(head);
+	struct field *root = create_parent_links(head);
+
 	if (resolve_field_name_refs(head))
 		return 1;
 
@@ -159,7 +160,7 @@ int main(int argc, char *argv[])
 	fclose(source_file);
 	free(source_path);
 
-	free_fields(head);
+	free_fields(root);
 	free(bytes);
 	free(name);
 	return 0;

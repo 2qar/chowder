@@ -641,54 +641,65 @@ static void create_parent_links_iter(struct field *parent, struct field *f)
 	}
 }
 
-void create_parent_links(struct field *root)
+struct field *create_parent_links(struct field *head)
 {
-	create_parent_links_iter(NULL, root);
+	struct field *root = calloc(1, sizeof(struct field));
+	root->type = FT_STRUCT;
+	root->struct_fields = head;
+	create_parent_links_iter(root, head);
+	return root;
 }
 
 // FIXME: all the stuff below seems like it belongs in a seperate file
 
-static struct field *find_field_with_len(struct field *f, uint32_t f_type, size_t f_name_len, char *f_name)
+static struct field *find_field(struct field *searching_field, uint32_t f_type, size_t f_name_len, char *f_name)
 {
-	struct field *res = NULL;
-	while (!res && f->type != 0) {
-		if (!f->name && f->type == f_type)
-			res = f;
-		if (f->name && (f->type == f_type || f_type == FT_ANY) && !strncmp(f->name, f_name, f_name_len))
-			res = f;
-		else if (f->type == FT_STRUCT)
-			res = find_field_with_len(f->struct_fields, f_type, f_name_len, f_name);
-		else if (f->type == FT_STRUCT_ARRAY)
-			res = find_field_with_len(f->struct_array.fields, f_type, f_name_len, f_name);
-		else if (f->type == FT_UNION)
-			res = find_field_with_len(f->union_data.fields, f_type, f_name_len, f_name);
-		else if (f->type == FT_BYTE_ARRAY && f->array.type_field)
-			res = find_field_with_len(f->array.type_field, f_type, f_name_len, f_name);
-
-		f = f->next;
+	struct field *parent = searching_field->parent;
+	struct field *field = NULL;
+	switch (parent->type) {
+		case FT_STRUCT:
+			field = parent->struct_fields;
+			break;
+		case FT_STRUCT_ARRAY:
+			field = parent->struct_array.fields;
+			break;
+		default:
+			fprintf(stderr, "\"%s\", parent of \"%s\", has no children. something is seriously wrong\n",
+					parent->name, searching_field->name);
+			return NULL;
 	}
-	return res;
+
+	struct field *found_field = NULL;
+	while (found_field == NULL && field->type != 0) {
+		if (field->name && !strncmp(field->name, f_name, f_name_len) && (field->type == f_type || f_type == FT_ANY)) {
+			found_field = field;
+		}
+		field = field->next;
+	}
+
+	if (found_field != NULL) {
+		return found_field;
+	} else if (parent->parent != NULL) {
+		return find_field(parent, f_type, f_name_len, f_name);
+	} else {
+		return NULL;
+	}
 }
 
-static struct field *find_field(struct field *f, uint32_t f_type, char *f_name)
-{
-	return find_field_with_len(f, f_type, strlen(f_name), f_name);
-}
-
-static bool resolve_condition_name_refs(struct field *root, struct condition *condition)
+static bool resolve_condition_name_refs(struct field *field)
 {
 	size_t i = 0;
 	bool err = false;
 	while (!err && i < 2) {
-		if (condition->operands[i].is_field) {
-			struct field *f = find_field_with_len(root, FT_ANY,
-					condition->operands[i].string_len,
-					condition->operands[i].string);
+		if (field->condition->operands[i].is_field) {
+			struct field *f = find_field(field, FT_ANY,
+					field->condition->operands[i].string_len,
+					field->condition->operands[i].string);
 			if (f == NULL) {
 				fprintf(stderr, "couldn't put up with this shit anymore\n");
 				return true;
 			} else {
-				condition->operands[i].field = f;
+				field->condition->operands[i].field = f;
 			}
 		}
 		++i;
@@ -696,12 +707,12 @@ static bool resolve_condition_name_refs(struct field *root, struct condition *co
 	return err;
 }
 
-static struct field *find_len_field(struct field *root, struct field *array_field)
+static struct field *find_len_field(struct field *array_field)
 {
 	size_t name_len = strlen(array_field->name) + 5;
 	char *name = calloc(name_len, sizeof(char));
 	snprintf(name, name_len, "%s_len", array_field->name);
-	struct field *len_field = find_field(root, FT_ANY, name);
+	struct field *len_field = find_field(array_field, FT_ANY, name_len-1, name);
 	free(name);
 	if (len_field == NULL)
 		fprintf(stderr, "array '%s' has no given length and '%s_len' doesn't exist, gimme one\n",
@@ -709,22 +720,27 @@ static struct field *find_len_field(struct field *root, struct field *array_fiel
 	return len_field;
 }
 
-static bool resolve_field_name_refs_iter(struct field *root, struct field *f)
+/* 'head' is the first actual field, not the root pseudo-field. */
+bool resolve_field_name_refs(struct field *head)
 {
+	struct field *f = head;
 	bool err = false;
 	while (!err && f->type != 0) {
 		if (f->condition != NULL) {
-			err = resolve_condition_name_refs(root, f->condition);
+			err = resolve_condition_name_refs(f);
+			if (err) {
+				break;
+			}
 		}
 
 		switch (f->type) {
 			case FT_BYTE_ARRAY:
 				if (f->array.type_field)
-					err = resolve_field_name_refs_iter(root, f->array.type_field);
+					err = resolve_field_name_refs(f->array.type_field);
 				/* fallthrough */
 			case FT_ARRAY:
 				if (!f->array.has_len) {
-					f->array.len_field = find_len_field(root, f);
+					f->array.len_field = find_len_field(f);
 					if (f->array.len_field == NULL)
 						err = true;
 					else if (f->type == FT_BYTE_ARRAY && f->array.type_field) {
@@ -737,17 +753,17 @@ static bool resolve_field_name_refs_iter(struct field *root, struct field *f)
 				}
 				break;
 			case FT_STRUCT:
-				err = resolve_field_name_refs_iter(root, f->struct_fields);
+				err = resolve_field_name_refs(f->struct_fields);
 				break;
 			case FT_STRUCT_ARRAY:
 				if (f->struct_array.len_field == NULL) {
-					f->struct_array.len_field = find_len_field(root, f);
+					f->struct_array.len_field = find_len_field(f);
 					if (f->struct_array.len_field == NULL)
 						err = true;
 				} else {
 					char *name = f->struct_array.len_field->name;
 					free(f->struct_array.len_field);
-					f->struct_array.len_field = find_field(root, FT_ANY, name);
+					f->struct_array.len_field = find_field(f, FT_ANY, strlen(name), name);
 					if (f->struct_array.len_field == NULL) {
 						fprintf(stderr, "the field given to bitcount() doesn't exist\n");
 						err = true;
@@ -755,13 +771,13 @@ static bool resolve_field_name_refs_iter(struct field *root, struct field *f)
 					free(name);
 				}
 				if (!err)
-					err = resolve_field_name_refs_iter(root, f->struct_array.fields);
+					err = resolve_field_name_refs(f->struct_array.fields);
 				break;
 			case FT_UNION:;
 				struct field *partial = f->union_data.enum_field;
 				char *name = partial->name;
 				free(partial);
-				struct field *enum_field = find_field(root, FT_ENUM, name);
+				struct field *enum_field = find_field(f, FT_ENUM, strlen(name), name);
 				if (enum_field == NULL) {
 					fprintf(stderr, "union '%s' depends on non-existent enum '%s'\n", f->name, name);
 					err = true;
@@ -770,7 +786,7 @@ static bool resolve_field_name_refs_iter(struct field *root, struct field *f)
 				f->union_data.enum_field = enum_field;
 
 				if (!err) {
-					err = resolve_field_name_refs_iter(root, f->union_data.fields);
+					err = resolve_field_name_refs(f->union_data.fields);
 				}
 				break;
 			default:
@@ -779,11 +795,6 @@ static bool resolve_field_name_refs_iter(struct field *root, struct field *f)
 		f = f->next;
 	}
 	return err;
-}
-
-bool resolve_field_name_refs(struct field *root)
-{
-	return resolve_field_name_refs_iter(root, root);
 }
 
 void free_fields(struct field *f)

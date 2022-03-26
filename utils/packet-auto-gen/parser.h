@@ -119,7 +119,7 @@ struct arg {
 
 struct token *parse_field(struct token *, struct field *);
 
-void create_parent_links(struct field *root);
+struct field *create_parent_links(struct field *head);
 bool resolve_field_name_refs(struct field *root);
 
 void free_fields(struct field *);
