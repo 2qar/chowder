@@ -65,6 +65,42 @@ static char *make_path(const char *prefix, char *filename, const char *extension
 	return path;
 }
 
+
+static void print_tokens(struct token *t)
+{
+	while (t != NULL) {
+		printf("%zu,%zu: is_sep=%d, len=%zu start=\"%.*s\"\n", t->line, t->col,
+				t->is_sep, t->len, (int) t->len, t->start);
+		t = t->next;
+	}
+}
+
+static void print_fields_aux(struct field *field, size_t indent)
+{
+	while (field != NULL && field->type != 0) {
+		printf("%*s", (int)indent*4, "");
+		printf("(field %p, type=0x%x name='%s' parent=%p)\n",
+				(void *)field, field->type, field->name,
+				(void *)field->parent);
+		switch (field->type) {
+			case FT_STRUCT:
+				print_fields_aux(field->struct_fields, indent+1);
+				break;
+			case FT_STRUCT_ARRAY:
+				print_fields_aux(field->struct_array.fields, indent+1);
+				break;
+			default:
+				break;
+		}
+		field = field->next;
+	}
+}
+
+static void print_fields(struct field *root)
+{
+	print_fields_aux(root, 0);
+}
+
 static void usage()
 {
 	fprintf(stderr, "usage: pc [-o output_dir] PACKET_FILE\n");
@@ -73,12 +109,20 @@ static void usage()
 int main(int argc, char *argv[])
 {
 	char *output_dir = NULL;
+	bool dump_tokens = false;
+	bool dump_fields = false;
 	int opt;
 	struct stat output_dir_stat;
-	while ((opt = getopt(argc, argv, "o:")) != -1) {
+	while ((opt = getopt(argc, argv, "o:tf")) != -1) {
 		switch (opt) {
 			case 'o':
 				output_dir = optarg;
+				break;
+			case 't':
+				dump_tokens = true;
+				break;
+			case 'f':
+				dump_fields = true;
 				break;
 			default:
 				usage();
@@ -112,6 +156,8 @@ int main(int argc, char *argv[])
 	}
 
 	struct token *tokens = lexer_parse(bytes);
+	if (tokens && dump_tokens)
+		print_tokens(tokens);
 
 	struct token *t = tokens;
 	while (!token_equals(t, "\n")) {
@@ -135,6 +181,9 @@ int main(int argc, char *argv[])
 
 	if (resolve_field_name_refs(head))
 		return 1;
+
+	if (dump_fields)
+		print_fields(root);
 
 	char *source_path = make_path(output_dir, name, ".c");
 	char *header_path = make_path(output_dir, name, ".h");
