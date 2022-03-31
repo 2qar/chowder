@@ -1,0 +1,16 @@
+id = 0x25
+
+VarInt chunk_x
+VarInt chunk_z
+VarInt sky_light_mask
+VarInt block_light_mask
+VarInt empty_sky_light_mask
+VarInt empty_block_light_mask
+Array(struct sky_light, bitcount(sky_light_mask)) sky_light_arrays {
+	VarInt bytes_len
+	ByteArray bytes
+}
+Array(struct block_light, bitcount(block_light_mask)) block_light_arrays {
+	VarInt bytes_len
+	ByteArray bytes
+}
