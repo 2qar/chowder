@@ -68,5 +68,7 @@ void free_section(struct section *s)
 {
 	free(s->palette);
 	free(s->blockstates);
+	free(s->sky_light);
+	free(s->block_light);
 	free(s);
 }

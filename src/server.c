@@ -103,6 +103,46 @@ static void write_chunk_to_packet(struct chunk_data *packet,
 	}
 }
 
+static void write_light_data_to_packet(struct update_light *packet,
+				       const struct chunk *chunk)
+{
+	static struct update_light_sky_light sky_light[CHUNK_SECTIONS_LEN];
+	static struct update_light_block_light block_light[CHUNK_SECTIONS_LEN];
+
+	size_t sky_light_idx = 0;
+	size_t block_light_idx = 0;
+	size_t i = 0;
+	packet->sky_light_mask = 0;
+	packet->block_light_mask = 0;
+	while (i < (size_t) chunk->sections_len) {
+		if (chunk->sections[i] != NULL) {
+			if (chunk->sections[i]->sky_light != NULL) {
+				packet->sky_light_mask |= 1 << i;
+				sky_light[sky_light_idx].bytes_len =
+				    SECTION_LIGHT_LEN;
+				sky_light[sky_light_idx].bytes =
+				    chunk->sections[i]->sky_light;
+				++sky_light_idx;
+			}
+			if (chunk->sections[i]->block_light != NULL) {
+				packet->block_light_mask |= 1 << i;
+				block_light[block_light_idx].bytes_len =
+				    SECTION_LIGHT_LEN;
+				block_light[block_light_idx].bytes =
+				    chunk->sections[i]->block_light;
+				++block_light_idx;
+			}
+		}
+		++i;
+	}
+	packet->empty_sky_light_mask =
+	    ~packet->sky_light_mask & ((1 << CHUNK_SECTIONS_LEN) - 1);
+	packet->empty_block_light_mask =
+	    ~packet->block_light_mask & ((1 << CHUNK_SECTIONS_LEN) - 1);
+	packet->sky_light_arrays = sky_light;
+	packet->block_light_arrays = block_light;
+}
+
 /* FIXME: this should be in a common header */
 /* https://wiki.vg/index.php?title=Protocol&oldid=16067#Position */
 static void mc_position_to_xyz(uint64_t pos, uint32_t *x, uint16_t *y,
@@ -187,6 +227,7 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 	conn->old_chunk_x = view_pack.chunk_x;
 	conn->old_chunk_z = view_pack.chunk_z;
 
+	struct update_light update_light_pack = { 0 };
 	struct chunk_data chunk_data_pack = { 0 };
 	chunk_data_pack.full_chunk = true;
 	/* TODO: calculate heightmaps / load them from the region file */
@@ -214,6 +255,20 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 			chunk = world_chunk_at(w, x, z);
 			if (chunk != NULL) {
 				++chunk->player_count;
+
+				update_light_pack.chunk_x = x;
+				update_light_pack.chunk_z = z;
+				write_light_data_to_packet(&update_light_pack,
+							   chunk);
+				err = PROTOCOL_WRITE(update_light, conn,
+						     &update_light_pack);
+				if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+					fprintf(
+					    stderr,
+					    "server_initialize_play_state(): "
+					    "failed to send light data\n");
+				}
+
 				chunk_data_pack.chunk_x = x;
 				chunk_data_pack.chunk_z = z;
 				write_chunk_to_packet(&chunk_data_pack, chunk,
@@ -464,6 +519,7 @@ int server_update_view(struct conn *conn, struct world *world)
 		.size = conn->view_distance,
 	};
 
+	struct update_light light_data = { 0 };
 	/* FIXME: the packets written here should probably be put into a queue
 	 *        on the connection for writing later so errors don't have to
 	 *        be handled here */
@@ -491,6 +547,17 @@ int server_update_view(struct conn *conn, struct world *world)
 			chunk = world_chunk_at(world, view_x, view_z);
 			if (chunk != NULL) {
 				++chunk->player_count;
+
+				light_data.chunk_x = view_x;
+				light_data.chunk_z = view_z;
+				write_light_data_to_packet(&light_data, chunk);
+				err = PROTOCOL_WRITE(update_light, conn,
+						     &light_data);
+				if (err.err_type != PROTOCOL_DO_ERR_SUCCESS) {
+					fprintf(stderr, "failed to write light "
+							"data!!! :(\n");
+				}
+
 				chunk_data.chunk_x = view_x;
 				chunk_data.chunk_z = view_z;
 				write_chunk_to_packet(&chunk_data, chunk,

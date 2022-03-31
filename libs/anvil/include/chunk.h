@@ -3,11 +3,12 @@
 
 #include "section.h"
 
-#define BIOMES_LEN 1024
+#define BIOMES_LEN	   1024
+#define CHUNK_SECTIONS_LEN 18
 
 struct chunk {
 	int sections_len;
-	struct section *sections[17];
+	struct section *sections[CHUNK_SECTIONS_LEN];
 	int *biomes;
 
 	/* FIXME: this doesn't belong in anvil. this chunk struct should be

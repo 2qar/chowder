@@ -236,6 +236,22 @@ enum anvil_err anvil_parse_chunk(struct hashmap *block_table,
 			blockstates->data.array->data.longs = NULL;
 		}
 
+		struct nbt *sky_light =
+		    nbt_get(s_nbt, TAG_Byte_Array, "SkyLight");
+		if (sky_light != NULL) {
+			s->sky_light =
+			    (uint8_t *) sky_light->data.array->data.bytes;
+			sky_light->data.array->data.bytes = NULL;
+		}
+
+		struct nbt *block_light =
+		    nbt_get(s_nbt, TAG_Byte_Array, "BlockLight");
+		if (block_light != NULL) {
+			s->block_light =
+			    (uint8_t *) block_light->data.array->data.bytes;
+			block_light->data.array->data.bytes = NULL;
+		}
+
 		c->sections[c->sections_len] = s;
 		++(c->sections_len);
 		l = list_next(l);
