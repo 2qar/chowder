@@ -85,6 +85,9 @@ static void nbt_free_node(struct nbt *root)
 
 void nbt_free(struct nbt *root)
 {
+	if (root == NULL) {
+		return;
+	}
 	if (root->tag == TAG_Compound) {
 		nbt_free_node(root);
 		free(root);
