@@ -143,16 +143,6 @@ static void write_light_data_to_packet(struct update_light *packet,
 	packet->block_light_arrays = block_light;
 }
 
-/* FIXME: this should be in a common header */
-/* https://wiki.vg/index.php?title=Protocol&oldid=16067#Position */
-static void mc_position_to_xyz(uint64_t pos, uint32_t *x, uint16_t *y,
-			       uint32_t *z)
-{
-	*x = pos >> 38;
-	*y = pos & 0xFFF;
-	*z = (pos >> 12) & 0x3FFFFFF;
-}
-
 static int server_initialize_play_state(struct conn *conn, struct world *w)
 {
 	struct join_game join_packet = { .entity_id = 123, // TODO
@@ -204,9 +194,9 @@ static int server_initialize_play_state(struct conn *conn, struct world *w)
 
 	// TODO: loading spawn should happen on server startup
 	uint64_t spawn_location = world_get_spawn(w);
-	uint32_t spawn_x = 0;
-	uint16_t spawn_y = 0;
-	uint32_t spawn_z = 0;
+	int32_t spawn_x = 0;
+	int16_t spawn_y = 0;
+	int32_t spawn_z = 0;
 	mc_position_to_xyz(spawn_location, &spawn_x, &spawn_y, &spawn_z);
 	if (world_load_chunks(w, spawn_x, spawn_z,
 			      server_properties.view_distance)

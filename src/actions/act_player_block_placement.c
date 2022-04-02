@@ -1,16 +1,10 @@
 #include "chunk.h"
 #include "conn.h"
+#include "mc.h"
 #include "player_block_placement.h"
 #include "world.h"
 
 #include <stdint.h>
-
-static void mc_position_to_xyz(uint64_t pos, int32_t *x, int16_t *y, int32_t *z)
-{
-	*x = pos >> 38;
-	*y = pos & 0xFFF;
-	*z = (pos << 26 >> 38);
-}
 
 void protocol_act_player_block_placement(struct conn *conn, struct world *world,
 					 void *data)

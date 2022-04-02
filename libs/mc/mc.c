@@ -29,3 +29,11 @@ int mc_coord_to_localized_chunk(int x)
 {
 	return mc_localized_chunk(mc_coord_to_chunk(x));
 }
+
+/* https://wiki.vg/index.php?title=Protocol&oldid=16067#Position */
+void mc_position_to_xyz(uint64_t pos, int32_t *x, int16_t *y, int32_t *z)
+{
+	*x = pos >> 38;
+	*y = pos & 0xFFF;
+	*z = (pos >> 12) & 0x3FFFFFF;
+}

@@ -4,6 +4,8 @@
 #ifndef CHOWDER_MC_H
 #define CHOWDER_MC_H
 
+#include <stdint.h>
+
 int mc_coord_to_region(int);
 int mc_coord_to_chunk(int);
 int mc_chunk_to_region(int);
@@ -11,5 +13,6 @@ int mc_chunk_to_region(int);
  * ex: mc_localized_chunk(-65) = -1 */
 int mc_localized_chunk(int);
 int mc_coord_to_localized_chunk(int);
+void mc_position_to_xyz(uint64_t pos, int32_t *x, int16_t *y, int32_t *z);
 
 #endif // CHOWDER_MC_H
