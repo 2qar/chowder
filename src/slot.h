@@ -10,4 +10,6 @@ struct slot {
 	struct nbt *nbt;
 };
 
+void slot_free(struct slot *);
+
 #endif // CHOWDER_SLOT_H
