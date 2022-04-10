@@ -25,6 +25,7 @@ struct protocol_action protocol_actions[UINT8_MAX] = {
 	ACTION(player_position),
 	ACTION(sb_player_position_rotation),
 	ACTIONF(creative_inventory_action),
+	ACTION(sb_held_item_change),
 };
 
 #define MSG_ACTION(PACKET_NAME, OUT_PACKET_NAME)                               \
